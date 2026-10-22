@@ -1,6 +1,21 @@
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
-from datetime import date
+from datetime import datetime
+
+VALID_CROPS = [
+    "Arhar (Tur-Red Gram)",
+    "Black Gram (Urd Beans)",
+    "Cowpea (Lobia-Karamani)",
+    "Green Gram (Moong)",
+    "Kabuli Chana (Chickpeas-White)",
+    "Lentil (Masur)",
+    "Maize",
+    "Rice",
+    "Soyabean",
+    "Soybean",
+    "Wheat",
+    "White Peas"
+]
 
 class ForecastRequest(BaseModel):
     state: str = Field(..., description="State name")
@@ -16,6 +31,29 @@ class ForecastRequest(BaseModel):
     def validate_horizon(cls, v):
         if v not in [1, 7, 30]:
             raise ValueError('Horizon must be 1, 7, or 30')
+        return v
+
+    @validator('confidence_level')
+    def validate_confidence_level(cls, v):
+        if abs(v - 0.95) > 1e-4:
+            raise ValueError('Only confidence_level=0.95 is calibrated for Mondrian conformal prediction.')
+        return v
+
+    @validator('crop')
+    def validate_crop(cls, v):
+        if v not in VALID_CROPS:
+            raise ValueError(f"Unknown crop '{v}'. Supported crops: {VALID_CROPS}")
+        return v
+
+    @validator('as_of_date')
+    def validate_as_of_date(cls, v):
+        if v is not None:
+            try:
+                dt = datetime.strptime(v, "%Y-%m-%d")
+            except Exception:
+                raise ValueError(f"Invalid as_of_date format '{v}'. Must be YYYY-MM-DD.")
+            if dt > datetime(2017, 6, 17):
+                raise ValueError(f"as_of_date '{v}' exceeds historical corpus maximum date (2017-06-17).")
         return v
 
 class PricePrediction(BaseModel):

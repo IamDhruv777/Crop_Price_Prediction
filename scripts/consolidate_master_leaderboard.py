@@ -82,8 +82,9 @@ def consolidate():
         master_df["Trust_Score"] = master_df["Relative_Accuracy"]
 
     # Order standard columns
+    master_df["Evaluation_Scope"] = "Offline Benchmark Only"
     cols = [
-        "Horizon", "Architecture_Type", "Model", "RMSE", "MAE", "MAPE",
+        "Horizon", "Architecture_Type", "Model", "Evaluation_Scope", "RMSE", "MAE", "MAPE",
         "R2", "Relative_Accuracy", "Tolerance_10pct", "Conformal_Coverage_95",
         "Directional_Accuracy", "Precision", "Recall", "F1_Score", "Training_Time_Sec"
     ]

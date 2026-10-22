@@ -51,8 +51,6 @@ st.session_state["display_mode"] = display_mode
 
 LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
 PREDICTIONS_PATH = Path("data/deployed_test_predictions.csv")
-if not PREDICTIONS_PATH.exists():
-    PREDICTIONS_PATH = Path("data/test_predictions.csv")
 
 if not LEADERBOARD_PATH.exists():
     st.error(f"Benchmark file not found at `{LEADERBOARD_PATH}`. Please run pipeline first.")

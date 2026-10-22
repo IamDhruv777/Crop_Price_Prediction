@@ -6,7 +6,7 @@ router = APIRouter(prefix='/analytics', tags=['analytics'])
 
 FI_PATH = Path("data/real_feature_importances.csv")
 LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
-PREDS_PATH = Path("data/test_predictions.csv")
+PREDS_PATH = Path("data/deployed_test_predictions.csv")
 
 @router.get('/alerts')
 async def get_active_alerts():

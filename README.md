@@ -24,26 +24,50 @@ A production-grade, spatial-temporal agricultural commodity price forecasting pl
 
 ## Multi-Model Architecture & Benchmark Leaderboard
 
-Evaluated on out-of-sample holdout test predictions from AGMARKNET mandi spot prices:
+### 1. Canonical Production Deployed Pipeline (Complete-Feature Test Support)
+Evaluated on complete feature support from holdout test partition (`data/metrics_deployed.json`):
 
-| Horizon | Architecture Tier | Model Architecture | RMSE (₹/Qtl) | MAE (₹/Qtl) | MAPE (%) | $R^2$ Score | Enterprise Trust (100−MAPE) |
+| Horizon | Deployed Model Architecture | Governing Configuration | Out-of-Sample RMSE (₹/Qtl) | MAE (₹/Qtl) | $R^2$ Score | Commercial Trust (100−MAPE) | Mondrian 95% Coverage |
 | :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **1-Day** | Machine Learning | Ridge Autoregressive | 284.40 | 103.65 | 3.11% | 0.9842 | 96.89% |
-| **1-Day** | Machine Learning | XGBoost + Spatial KNN | 285.03 | 95.67 | 2.85% | 0.9842 | 97.15% |
-| **1-Day** | Machine Learning | Tuned XGBoost Regressor | 285.36 | 96.18 | 2.86% | 0.9841 | 97.14% |
-| **1-Day** | Statistical Baseline | Naive Persistence Baseline | 296.10 | 93.95 | 2.81% | 0.9829 | 97.19% |
-| **7-Day** | Deep Learning | Temporal CNN (TCN) | 328.17 | 140.23 | 4.00% | 0.9784 | 96.00% |
-| **7-Day** | Deep Learning | PyTorch GRU | 329.38 | 141.79 | 4.02% | 0.9783 | 95.98% |
-| **7-Day** | Deep Learning | Time-Series Transformer | 330.37 | 141.31 | 4.02% | 0.9781 | 95.98% |
-| **7-Day** | Deep Learning | PyTorch LSTM | 330.79 | 142.20 | 4.05% | 0.9781 | 95.95% |
-| **7-Day** | Ensemble Meta-Learner | Super Ensemble (Stacking) | 332.22 | 147.98 | 4.26% | 0.9779 | 95.74% |
-| **7-Day** | Machine Learning | Tuned XGBoost Regressor | 336.08 | 148.92 | 4.20% | 0.9774 | 95.80% |
-| **7-Day** | Statistical Baseline | Naive Persistence Baseline | 363.38 | 141.90 | 4.08% | 0.9735 | 95.92% |
-| **30-Day** | Statistical Baseline | Naive Persistence Baseline | 487.92 | 229.82 | 6.48% | 0.9512 | 93.52% |
-| **30-Day** | Ensemble Meta-Learner | Super Ensemble (Stacking) | 500.86 | 260.80 | 7.37% | 0.9485 | 92.63% |
-| **30-Day** | Machine Learning | Tuned XGBoost Regressor | 542.58 | 283.34 | 7.58% | 0.9396 | 92.42% |
+| **1-Day** | **Tuned XGBoost Regressor** | Anchor: $P_t$, Clip: $[-200, 200]$ | **₹283.38** | **₹95.40** | **0.9844** | **97.16%** | **96.14%** |
+| **7-Day** | **Tuned XGBoost Regressor** | Anchor: $0.6P_t + 0.4\text{MA}_7$, Clip: $[-400, 400]$ | **₹332.69** | **₹147.03** | **0.9779** | **95.84%** | **95.60%** |
+| **30-Day** | **Naive Persistence Baseline** | Anchor: $P_t$, Flat Trajectory | **₹486.53** | **₹228.68** | **0.9516** | **93.54%** | **94.95%** |
 
-*Note: For 30-Day forecasts, the Naive Persistence Baseline strictly outperforms all ML and deep learning models (Persistence RMSE ₹487.92 vs Model ₹500.86; MAE ₹229.82 vs ₹260.80). Consequently, Naive Persistence is the production-deployed model for 30-Day horizons.*
+*Note on 30-Day Horizon: At 30 days ahead, the Naive Persistence Baseline strictly outperforms all trained classical ML and deep learning models on out-of-sample holdout test data (Persistence RMSE ₹486.53 vs ML ₹542.58; MAE ₹228.68 vs ₹283.34). Consequently, Naive Persistence is registered and served as the canonical deployed baseline for 30-Day horizons.*
+
+### 2. Master Model Architecture Leaderboard (Offline Benchmark Exploration)
+Consolidated from full architectural evaluation across classical ML, deep learning sequence models, and statistical baselines (`data/master_model_leaderboard.csv`):
+
+| Horizon | Architecture Tier | Model Architecture | Evaluation Scope | RMSE (₹/Qtl) | MAE (₹/Qtl) | $R^2$ Score | Enterprise Trust (100−MAPE) | APMC Tol (±10%) |
+| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1-Day** | Machine Learning | Tuned XGBoost Regressor | Offline Benchmark Only | 283.38 | 95.40 | 0.9844 | 97.16% | 94.66% |
+| **1-Day** | Machine Learning | Ridge Autoregressive | Offline Benchmark Only | 284.40 | 103.65 | 0.9842 | 96.89% | 94.88% |
+| **1-Day** | Machine Learning | XGBoost + Spatial KNN | Offline Benchmark Only | 285.03 | 95.67 | 0.9842 | 97.15% | 94.65% |
+| **1-Day** | Machine Learning | LightGBM Regressor | Offline Benchmark Only | 285.49 | 96.30 | 0.9841 | 97.15% | 94.65% |
+| **1-Day** | Ensemble Meta-Learner | Super Ensemble (Stacking) | Offline Benchmark Only | 286.16 | 101.11 | 0.9840 | 97.04% | 94.66% |
+| **1-Day** | Machine Learning | Random Forest Regressor | Offline Benchmark Only | 292.02 | 96.87 | 0.9834 | 97.12% | 94.34% |
+| **1-Day** | Statistical Baseline | Naive Persistence Baseline | Offline Benchmark Only | 296.10 | 93.95 | 0.9829 | 97.19% | 94.41% |
+| **1-Day** | Statistical Baseline | Moving Average (7-day) | Offline Benchmark Only | 321.34 | 130.03 | 0.9799 | 96.25% | 92.01% |
+| **7-Day** | Deep Learning | Temporal CNN (TCN) | Offline Benchmark Only | 328.17 | 140.23 | 0.9784 | 96.00% | 91.22% |
+| **7-Day** | Deep Learning | PyTorch GRU | Offline Benchmark Only | 329.38 | 141.79 | 0.9783 | 95.98% | 91.14% |
+| **7-Day** | Deep Learning | Time-Series Transformer | Offline Benchmark Only | 330.37 | 141.31 | 0.9781 | 95.98% | 90.99% |
+| **7-Day** | Deep Learning | PyTorch LSTM | Offline Benchmark Only | 330.79 | 142.20 | 0.9781 | 95.95% | 91.05% |
+| **7-Day** | Ensemble Meta-Learner | Super Ensemble (Stacking) | Offline Benchmark Only | 332.22 | 147.98 | 0.9779 | 95.74% | 90.78% |
+| **7-Day** | Machine Learning | Tuned XGBoost Regressor | Offline Benchmark Only | 332.69 | 147.03 | 0.9779 | 95.84% | 90.57% |
+| **7-Day** | Machine Learning | Random Forest Regressor | Offline Benchmark Only | 334.60 | 146.07 | 0.9776 | 95.84% | 90.48% |
+| **7-Day** | Machine Learning | XGBoost + Spatial KNN | Offline Benchmark Only | 338.09 | 150.00 | 0.9771 | 95.78% | 90.37% |
+| **7-Day** | Machine Learning | LightGBM Regressor | Offline Benchmark Only | 339.26 | 151.38 | 0.9769 | 95.75% | 90.19% |
+| **7-Day** | Machine Learning | Ridge Autoregressive | Offline Benchmark Only | 339.44 | 165.07 | 0.9769 | 95.07% | 89.14% |
+| **7-Day** | Statistical Baseline | Naive Persistence Baseline | Offline Benchmark Only | 363.38 | 141.90 | 0.9735 | 95.92% | 90.71% |
+| **7-Day** | Statistical Baseline | Moving Average (7-day) | Offline Benchmark Only | 380.13 | 166.96 | 0.9711 | 95.24% | 88.20% |
+| **30-Day** | Statistical Baseline | Naive Persistence Baseline | Offline Benchmark Only | 486.53 | 228.68 | 0.9516 | 93.54% | 80.12% |
+| **30-Day** | Ensemble Meta-Learner | Super Ensemble (Stacking) | Offline Benchmark Only | 500.86 | 260.80 | 0.9485 | 92.63% | 78.36% |
+| **30-Day** | Machine Learning | Ridge Autoregressive | Offline Benchmark Only | 522.66 | 298.51 | 0.9440 | 91.20% | 69.98% |
+| **30-Day** | Machine Learning | LightGBM Regressor | Offline Benchmark Only | 536.52 | 280.08 | 0.9410 | 92.50% | 76.47% |
+| **30-Day** | Machine Learning | Tuned XGBoost Regressor | Offline Benchmark Only | 542.58 | 283.34 | 0.9396 | 92.42% | 76.05% |
+| **30-Day** | Machine Learning | Random Forest Regressor | Offline Benchmark Only | 545.97 | 283.81 | 0.9389 | 92.36% | 75.94% |
+| **30-Day** | Machine Learning | XGBoost + Spatial KNN | Offline Benchmark Only | 560.37 | 294.47 | 0.9356 | 92.16% | 74.58% |
+| **30-Day** | Statistical Baseline | Moving Average (30-day) | Offline Benchmark Only | 646.45 | 323.52 | 0.9143 | 91.14% | 71.71% |
 
 ---
 
@@ -85,7 +109,7 @@ Explore interactive Swagger documentation at [http://localhost:8000/docs](http:/
 
 ## Running Automated Tests
 
-Run the comprehensive 38-test automated test suite covering inference bounds, deployment parity, zero-leakage causal lags, spatial distance, and API endpoints:
+Run the comprehensive 52-test automated test suite covering inference bounds, deployment parity, zero-leakage causal lags, spatial distance, and API endpoints:
 ```bash
 pytest tests/
 ```

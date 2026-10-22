@@ -268,8 +268,11 @@ def test_30d_persistence_deployment():
     assert res["model_name"] == "Naive Persistence Baseline"
     assert res["predicted_price"] == res["base_price"]
     assert res["price_change"] == 0.0
-    assert res["rmse"] == 487.92
-    assert res["mae"] == 229.82
+    # Canonical deployed persistence metrics on complete support (from metrics_deployed.json)
+    # Corrected from stale 487.92 / 229.82 all-row unclipped values
+    assert res["rmse"] == 486.53
+    assert res["mae"] == 228.68
+    assert res["r2"] == 0.9516
 
     # Verify flat trajectory
     trajectory = res["predictions_trajectory"]

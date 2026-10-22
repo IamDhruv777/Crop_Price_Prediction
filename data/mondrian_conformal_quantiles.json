@@ -52,8 +52,8 @@
       }
     },
     "deployment_models": {
-      "1-Day": "Tuned XGBoost Regressor (anchor: modal_price, clip: [-200, 200])",
-      "7-Day": "Tuned XGBoost Regressor (anchor: 0.6*modal_price + 0.4*price_rolling_mean_7, clip: [-400, 400])",
+      "1-Day": "Tuned XGBoost Regressor (anchor: modal_price, clip: [-200.0, 200.0])",
+      "7-Day": "Tuned XGBoost Regressor (anchor: 0.6*modal_price + 0.4*price_rolling_mean_7, clip: [-400.0, 400.0])",
       "30-Day": "Naive Persistence Baseline (anchor: modal_price)"
     }
   },

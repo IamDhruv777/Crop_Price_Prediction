@@ -4,7 +4,7 @@ from pathlib import Path
 
 router = APIRouter(prefix='/prices', tags=['prices'])
 
-PREDS_PATH = Path("data/test_predictions.csv")
+PREDS_PATH = Path("data/deployed_test_predictions.csv")
 
 @router.get('/current')
 async def get_current_prices(limit: int = 50):

@@ -63,3 +63,18 @@ python scripts/evaluate_deployed.py
 # 4. Regenerate reports and cryptographic manifest
 python scripts/generate_audit_reports.py
 ```
+
+---
+
+## 5. CRYPTOGRAPHIC ARTIFACT INTEGRITY MANIFEST
+
+Generated dynamically from `data/report_manifest.json`:
+
+| Artifact File | Relative Path | Size (Bytes) | SHA-256 Checksum |
+|:---|:---|:---:|:---|
+| `metrics_deployed.json` | `data/metrics_deployed.json` | 15,955 | `00098456ad8f55f24db21389cd20f3807e342fc0c3f62694bfc1090b983a7956` |
+| `metrics_deployed_by_crop.csv` | `data/metrics_deployed_by_crop.csv` | 2,927 | `f43213065df417a9baa184900602945c5246c8df159a316811579bfa36201c94` |
+| `deployed_test_predictions.csv` | `data/deployed_test_predictions.csv` | 63,552,161 | `225f28194e0aebecd7f08ecb62db8b9267fa4421a856ffbb1ad165dfb9f7ebc3` |
+| `mondrian_conformal_quantiles.json` | `data/mondrian_conformal_quantiles.json` | 3,039 | `8cbd372153342fb440bab700c37298f85145c7252c012f8359a012039a92be6b` |
+| `master_model_leaderboard.csv` | `data/master_model_leaderboard.csv` | 3,732 | `f06f2697d4ca6d93c042d9233fc2715f14658c3697f57cd682d54f6af12d8156` |
+| `deployment_registry.json` | `models/trained/deployment_registry.json` | 1,802 | `11b4ef33212888a01a9bfab761a6548ce336438b70c9f327a1b1106547966c3c` |

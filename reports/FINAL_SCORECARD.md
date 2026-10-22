@@ -80,9 +80,9 @@ Generated strictly from `data/metrics_by_crop.csv`:
 
 ### Conformal Coverage Disclosures (<95% Threshold)
 Mondrian calibration on validation complete support achieves macro average coverage $\ge 95%$ across all horizons (96.18% 1D, 95.90% 7D, 96.03% 30D). Specific commodities with high volatility fall below 95%:
-- **1-Day:** Kabuli Chana (92.6%), Wheat (94.94%)
-- **7-Day:** Kabuli Chana (91.1%), Wheat (93.29%)
-- **30-Day:** Kabuli Chana (91.7%), Wheat (88.4%)
+- **1-Day:** Kabuli Chana (Chickpeas-White) (92.60%), Wheat (94.94%)
+- **7-Day:** Kabuli Chana (Chickpeas-White) (91.10%), Wheat (93.29%)
+- **30-Day:** Kabuli Chana (Chickpeas-White) (91.72%), Wheat (88.36%)
 
 All other commodities achieve $\ge 95%$ empirical coverage.
 
@@ -99,8 +99,8 @@ Generated strictly from `data/master_model_leaderboard.csv`:
 | **3** | **Time-Series Transformer** | Deep Learning | ₹330.37 | ₹141.31 | 0.9781 | 95.98% | 90.99% |
 | **4** | **PyTorch LSTM** | Deep Learning | ₹330.79 | ₹142.20 | 0.9781 | 95.95% | 91.05% |
 | **5** | **Super Ensemble (Stacking)** | Ensemble Meta-Learner | ₹332.22 | ₹147.98 | 0.9779 | 95.74% | 90.78% |
-| **6** | **Random Forest Regressor** | Machine Learning | ₹334.60 | ₹146.07 | 0.9776 | 95.84% | 90.48% |
-| **7** | **Tuned XGBoost Regressor** | Machine Learning | ₹336.08 | ₹148.92 | 0.9774 | 95.80% | 90.38% |
+| **6** | **Tuned XGBoost Regressor** | Machine Learning | ₹332.69 | ₹147.03 | 0.9779 | 95.84% | 90.57% |
+| **7** | **Random Forest Regressor** | Machine Learning | ₹334.60 | ₹146.07 | 0.9776 | 95.84% | 90.48% |
 | **8** | **XGBoost + Spatial KNN Features** | Machine Learning | ₹338.09 | ₹150.00 | 0.9771 | 95.78% | 90.37% |
 | **9** | **LightGBM Regressor** | Machine Learning | ₹339.26 | ₹151.38 | 0.9769 | 95.75% | 90.19% |
 | **10** | **Ridge Autoregressive** | Machine Learning | ₹339.44 | ₹165.07 | 0.9769 | 95.07% | 89.14% |
@@ -115,3 +115,18 @@ Generated strictly from `data/master_model_leaderboard.csv`:
 - **Fully Supported Complete Pairs (100% 48 features non-null):** 4,554 (87.3%)
 - **Unsupported Incomplete Pairs (<30d trading history):** 664 (12.7%) -> strictly returns HTTP 422 (`insufficient_data`)
 - **Zero-Fill Prohibition:** Production inference strictly enforces a zero-fill prohibition, returning an explicit error for incomplete rows and maintaining complete-feature parity between offline benchmarks and online serving.
+
+---
+
+## 6. CRYPTOGRAPHIC ARTIFACT INTEGRITY MANIFEST
+
+Generated dynamically from `data/report_manifest.json`:
+
+| Artifact File | Relative Path | Size (Bytes) | SHA-256 Checksum |
+|:---|:---|:---:|:---|
+| `metrics_deployed.json` | `data/metrics_deployed.json` | 15,955 | `00098456ad8f55f24db21389cd20f3807e342fc0c3f62694bfc1090b983a7956` |
+| `metrics_deployed_by_crop.csv` | `data/metrics_deployed_by_crop.csv` | 2,927 | `f43213065df417a9baa184900602945c5246c8df159a316811579bfa36201c94` |
+| `deployed_test_predictions.csv` | `data/deployed_test_predictions.csv` | 63,552,161 | `225f28194e0aebecd7f08ecb62db8b9267fa4421a856ffbb1ad165dfb9f7ebc3` |
+| `mondrian_conformal_quantiles.json` | `data/mondrian_conformal_quantiles.json` | 3,039 | `8cbd372153342fb440bab700c37298f85145c7252c012f8359a012039a92be6b` |
+| `master_model_leaderboard.csv` | `data/master_model_leaderboard.csv` | 3,732 | `f06f2697d4ca6d93c042d9233fc2715f14658c3697f57cd682d54f6af12d8156` |
+| `deployment_registry.json` | `models/trained/deployment_registry.json` | 1,802 | `11b4ef33212888a01a9bfab761a6548ce336438b70c9f327a1b1106547966c3c` |

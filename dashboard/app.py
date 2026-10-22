@@ -28,8 +28,6 @@ st.set_page_config(
 )
 
 PREDS_PATH = Path("data/deployed_test_predictions.csv")
-if not PREDS_PATH.exists():
-    PREDS_PATH = Path("data/test_predictions.csv")
 GEO_PATH = Path("data/raw/geography/market_master.csv")
 HIST_PATH = Path("data/processed/historical_multi_crop_sample.csv")
 LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")

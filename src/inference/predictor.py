@@ -31,6 +31,70 @@ METRICS_DEPLOYED_PATH = DATA_DIR / "metrics_deployed.json"
 METRICS_PATH = DATA_DIR / "metrics.json"
 MONDRIAN_PATH = DATA_DIR / "mondrian_conformal_quantiles.json"
 
+KNOWN_COMMODITIES = [
+    "Arhar (Tur-Red Gram)",
+    "Black Gram (Urd Beans)",
+    "Cowpea (Lobia-Karamani)",
+    "Green Gram (Moong)",
+    "Kabuli Chana (Chickpeas-White)",
+    "Lentil (Masur)",
+    "Maize",
+    "Rice",
+    "Soyabean",
+    "Wheat",
+    "White Peas"
+]
+
+
+def compute_canonical_anchor(df_or_series: Any, horizon: int) -> Any:
+    """Computes the canonical price anchor according to deployment configuration."""
+    if isinstance(df_or_series, (pd.Series, dict)):
+        base_price = float(df_or_series["modal_price"])
+        if horizon == 1:
+            return base_price
+        elif horizon == 7:
+            p_roll7 = df_or_series.get("price_rolling_mean_7", base_price)
+            if pd.isna(p_roll7):
+                p_roll7 = base_price
+            return 0.6 * base_price + 0.4 * float(p_roll7)
+        else:
+            return base_price
+    else:
+        # DataFrame / batch
+        base_price = df_or_series["modal_price"].values
+        if horizon == 1:
+            return base_price
+        elif horizon == 7:
+            p_roll7 = df_or_series["price_rolling_mean_7"].values if "price_rolling_mean_7" in df_or_series else base_price
+            p_roll7 = np.where(pd.isna(p_roll7), base_price, p_roll7)
+            return 0.6 * base_price + 0.4 * p_roll7
+        else:
+            return base_price
+
+
+def predict_canonical_batch(
+    model: Any,
+    df: pd.DataFrame,
+    horizon: int,
+    reg_entry: Dict[str, Any]
+) -> np.ndarray:
+    """
+    Computes predictions using the exact canonical deployment logic:
+    anchor + clip(model.predict(X), -clip_delta, clip_delta), floor at 10.0.
+    For persistence (horizon=30 or is_persistence), returns anchor.
+    """
+    anchor = compute_canonical_anchor(df, horizon)
+    if reg_entry.get("is_persistence") or horizon == 30:
+        return anchor
+
+    feats = list(model.feature_names_in_)
+    raw_delta = model.predict(df[feats])
+    clip_delta = reg_entry.get("clip_delta")
+    if clip_delta is not None:
+        raw_delta = np.clip(raw_delta, -clip_delta, clip_delta)
+    pred = np.maximum(10.0, np.round(anchor + raw_delta, 2))
+    return pred
+
 
 class CropPricePredictor:
     def __init__(self, config: Optional[Dict[str, Any]] = None, db_session: Any = None):
@@ -201,6 +265,35 @@ class CropPricePredictor:
         if horizon not in [1, 7, 30]:
             raise ValueError(f"Invalid forecast horizon: {horizon}. Must be 1, 7, or 30.")
 
+        # Validate crop strictly
+        clean_crop = crop.strip()
+        if clean_crop == "Soybean":
+            clean_crop = "Soyabean"
+        if clean_crop not in KNOWN_COMMODITIES:
+            return {
+                "status": "error",
+                "error_code": "unknown_crop",
+                "detail": f"Unknown crop '{crop}'. Valid crops: {KNOWN_COMMODITIES}"
+            }
+        crop = clean_crop
+
+        # Validate as_of_date strictly
+        if as_of_date:
+            try:
+                target_dt = pd.to_datetime(as_of_date, format="%Y-%m-%d", errors="raise")
+            except Exception:
+                return {
+                    "status": "error",
+                    "error_code": "invalid_date",
+                    "detail": f"Invalid as_of_date format '{as_of_date}'. Must be YYYY-MM-DD."
+                }
+            if target_dt > pd.to_datetime("2017-06-17"):
+                return {
+                    "status": "error",
+                    "error_code": "invalid_date",
+                    "detail": f"as_of_date '{as_of_date}' exceeds historical corpus maximum date (2017-06-17)."
+                }
+
         model, metadata = self.load_model(crop, horizon)
         if model is None:
             return {
@@ -294,10 +387,9 @@ class CropPricePredictor:
                     "is_interpolated_bound": (step < horizon)
                 })
 
-            pers_metrics = self._get_metrics_json().get("persistence_by_horizon", {}).get("30-Day", {})
-            p_rmse = float(pers_metrics.get("RMSE", metadata["rmse"]))
-            p_mae = float(pers_metrics.get("MAE", metadata["mae"]))
-            p_r2 = float(pers_metrics.get("R2", metadata["r2"]))
+            p_rmse = float(metadata["rmse"])
+            p_mae = float(metadata["mae"])
+            p_r2 = float(metadata["r2"])
 
             return {
                 "status": "success",
@@ -347,16 +439,8 @@ class CropPricePredictor:
                 "detail": f"Required model features missing or null for {market} / {crop}: {missing_features}"
             }
 
-        # Exact Training Anchor Parity
-        if horizon == 1:
-            anchor = float(latest_record["modal_price"])
-        elif horizon == 7:
-            p_roll7 = float(latest_record.get("price_rolling_mean_7", base_price))
-            if pd.isna(p_roll7):
-                p_roll7 = base_price
-            anchor = 0.6 * base_price + 0.4 * p_roll7
-        else:
-            anchor = base_price
+        # Exact Training Anchor Parity using Canonical Calculation
+        anchor = float(compute_canonical_anchor(latest_record, horizon))
 
         X_input = pd.DataFrame([latest_record[feat_cols]])
         try:

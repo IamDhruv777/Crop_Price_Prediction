@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 from datetime import datetime, timedelta
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from src.inference.predictor import CropPricePredictor
 
 router = APIRouter(prefix='/forecasts', tags=['forecasts'])
 
-PREDS_PATH = Path("data/test_predictions.csv")
+PREDS_PATH = Path("data/deployed_test_predictions.csv")
 LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
 
 predictor = CropPricePredictor()
@@ -36,8 +37,8 @@ async def predict_forecast(request: ForecastRequest):
         res = predictor.predict(**kwargs)
         if res.get("status") == "error":
             error_code = res.get("error_code")
-            if error_code == "insufficient_data":
-                raise HTTPException(status_code=422, detail=res.get("detail", "Insufficient data for prediction"))
+            if error_code in ["insufficient_data", "unknown_crop", "invalid_date"]:
+                raise HTTPException(status_code=422, detail=res.get("detail", "Insufficient data or validation error"))
             elif error_code == "model_unavailable":
                 raise HTTPException(status_code=503, detail=res.get("detail", "Model unavailable"))
             else:
@@ -53,6 +54,13 @@ async def predict_forecast(request: ForecastRequest):
                 is_interpolated_bound=p.get("is_interpolated_bound", False)
             ))
             
+        if not res.get("model_version"):
+            raise HTTPException(status_code=500, detail="Missing model_version in prediction output")
+        if not res.get("as_of_date"):
+            raise HTTPException(status_code=500, detail="Missing as_of_date in prediction output")
+        if res.get("is_historical_backtest") is None:
+            raise HTTPException(status_code=500, detail="Missing is_historical_backtest in prediction output")
+
         return ForecastResponse(
             state=res["state"],
             district=res["district"],
@@ -60,14 +68,14 @@ async def predict_forecast(request: ForecastRequest):
             crop=res["crop"],
             horizon=res["horizon"],
             model=res["model_name"],
-            model_version=res.get("model_version", "2.1.0-production"),
+            model_version=res["model_version"],
             predictions=predictions,
             confidence_level=res["confidence_level"],
             rmse=res["rmse"],
             mae=res["mae"],
             r2=res.get("r2"),
-            as_of_date=res.get("as_of_date", "2017-06-16"),
-            is_historical_backtest=res.get("is_historical_backtest", True)
+            as_of_date=res["as_of_date"],
+            is_historical_backtest=res["is_historical_backtest"]
         )
     except HTTPException:
         raise
@@ -77,13 +85,15 @@ async def predict_forecast(request: ForecastRequest):
 @router.get('/history/{market_id}/{commodity}')
 async def get_forecast_history(market_id: str, commodity: str):
     """
-    Recent predictions for market and commodity.
+    Recent predictions for market and commodity from deployed test predictions.
+    Sanitizes NaN float values to None for strict JSON compliance.
     """
     if PREDS_PATH.exists():
         df = pd.read_csv(PREDS_PATH)
         match = df[(df['market'].str.lower() == market_id.lower()) & (df['commodity'].str.lower() == commodity.lower())]
         if not match.empty:
-            return {"market_id": market_id, "commodity": commodity, "history": match.tail(30).to_dict(orient='records')}
+            records = match.tail(30).replace({np.nan: None}).to_dict(orient='records')
+            return {"market_id": market_id, "commodity": commodity, "history": records}
     return {"market_id": market_id, "commodity": commodity, "history": []}
 
 @router.get('/accuracy/{model_name}')

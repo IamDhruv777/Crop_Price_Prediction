@@ -14,10 +14,18 @@ Support: Complete-feature rows only (no zero fill).
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import numpy as np
 import pandas as pd
 import joblib
+
+from src.inference.predictor import compute_canonical_anchor, predict_canonical_batch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -103,8 +111,13 @@ def main():
     logger.info(f"Loading test split from {TEST_SPLIT_PATH}...")
     test_df = pd.read_csv(TEST_SPLIT_PATH, low_memory=False)
 
-    xgb_1d = joblib.load(MODELS_DIR / "xgboost_1d.joblib")
-    xgb_7d = joblib.load(MODELS_DIR / "xgboost_7d.joblib")
+    if not REGISTRY_PATH.exists():
+        raise FileNotFoundError(f"Deployment registry missing at {REGISTRY_PATH}")
+    with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+        registry = json.load(f)
+
+    xgb_1d = joblib.load(REPO_ROOT / registry["1-Day"]["model_file"])
+    xgb_7d = joblib.load(REPO_ROOT / registry["7-Day"]["model_file"])
     feats = list(xgb_1d.feature_names_in_)
 
     # Filter to complete-feature support
@@ -115,12 +128,9 @@ def main():
     with open(MONDRIAN_PATH, "r", encoding="utf-8") as f:
         mondrian_q = json.load(f)
 
-    # 1. Generate deployed predictions
+    # 1. Generate deployed predictions via canonical batch predictor
     # 1D
-    anc1 = df_comp["modal_price"].values
-    raw_delta1 = xgb_1d.predict(df_comp[feats])
-    clip_delta1 = np.clip(raw_delta1, -200.0, 200.0)
-    pred1 = np.maximum(10.0, np.round(anc1 + clip_delta1, 2))
+    pred1 = predict_canonical_batch(xgb_1d, df_comp, 1, registry["1-Day"])
     df_comp["predicted_price_1d"] = pred1
 
     q1_map = mondrian_q["1-Day"]
@@ -130,10 +140,7 @@ def main():
     df_comp["upper_bound_1d"] = np.round(pred1 + q1_vals, 2)
 
     # 7D
-    anc7 = 0.6 * df_comp["modal_price"].values + 0.4 * df_comp["price_rolling_mean_7"].values
-    raw_delta7 = xgb_7d.predict(df_comp[feats])
-    clip_delta7 = np.clip(raw_delta7, -400.0, 400.0)
-    pred7 = np.maximum(10.0, np.round(anc7 + clip_delta7, 2))
+    pred7 = predict_canonical_batch(xgb_7d, df_comp, 7, registry["7-Day"])
     df_comp["predicted_price_7d"] = pred7
 
     q7_map = mondrian_q["7-Day"]
@@ -143,7 +150,7 @@ def main():
     df_comp["upper_bound_7d"] = np.round(pred7 + q7_vals, 2)
 
     # 30D (Naive Persistence)
-    pred30 = df_comp["modal_price"].values
+    pred30 = predict_canonical_batch(None, df_comp, 30, registry["30-Day"])
     df_comp["predicted_price_30d"] = pred30
 
     q30_map = mondrian_q["30-Day"]

@@ -61,8 +61,6 @@ else:
 # Load real pipeline outputs
 DATA_DIR = Path("data")
 PREDS_FILE = DATA_DIR / "deployed_test_predictions.csv"
-if not PREDS_FILE.exists():
-    PREDS_FILE = DATA_DIR / "test_predictions.csv"
 METRICS_FILE = DATA_DIR / "master_model_leaderboard.csv"
 MONDRIAN_FILE = DATA_DIR / "mondrian_conformal_quantiles.json"
 

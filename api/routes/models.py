@@ -8,6 +8,21 @@ router = APIRouter(prefix='/models', tags=['models'])
 LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
 DEPLOYMENT_REGISTRY_PATH = Path("models/trained/deployment_registry.json")
 
+KNOWN_CROPS = {
+    "Arhar (Tur-Red Gram)",
+    "Black Gram (Urd Beans)",
+    "Cowpea (Lobia-Karamani)",
+    "Green Gram (Moong)",
+    "Kabuli Chana (Chickpeas-White)",
+    "Lentil (Masur)",
+    "Maize",
+    "Rice",
+    "Soyabean",
+    "Soybean",
+    "Wheat",
+    "White Peas"
+}
+
 @router.get('/')
 async def list_models():
     """
@@ -30,10 +45,14 @@ async def compare_models():
     return {"comparison": []}
 
 @router.get('/best')
-async def get_best_model(crop: str = "Onion", horizon: str = "7-Day"):
+async def get_best_model(crop: str = "Wheat", horizon: str = "7-Day"):
     """
     Return champion model based on benchmark evaluation and deployment registry.
+    Validates crop and returns exact artifact path from model_file.
     """
+    if crop not in KNOWN_CROPS:
+        raise HTTPException(status_code=404, detail=f"Unknown crop '{crop}'. Valid crops: {sorted(list(KNOWN_CROPS))}")
+
     norm_horizon = horizon if "-Day" in horizon else f"{horizon}-Day"
 
     if DEPLOYMENT_REGISTRY_PATH.exists():
@@ -46,7 +65,7 @@ async def get_best_model(crop: str = "Onion", horizon: str = "7-Day"):
                 "horizon": norm_horizon,
                 "champion_model": dep_info["model_name"],
                 "model_version": dep_info.get("model_version", "2.1.0-production"),
-                "artifact": dep_info.get("model_path")
+                "artifact": dep_info.get("model_file") or dep_info.get("model_path")
             }
 
     if LEADERBOARD_PATH.exists():

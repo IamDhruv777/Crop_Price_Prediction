@@ -22,10 +22,10 @@ if not st.session_state.get("logged_in", False) or st.session_state.get("user_ro
 # Authentication Guard: Redirect to Landing Screen if not logged in
 
 
-PREDS_PATH = Path("data/test_predictions.csv")
+PREDS_PATH = Path("data/deployed_test_predictions.csv")
 
 if not PREDS_PATH.exists():
-    st.error("Predictions file not found at `data/test_predictions.csv`.")
+    st.error("Predictions file not found at `data/deployed_test_predictions.csv`.")
     st.stop()
 
 preds_df = pd.read_csv(PREDS_PATH)

@@ -75,11 +75,12 @@ def generate_manifest():
                 "sha256": compute_sha256(path)
             }
         else:
-            logger.warning(f"Artifact {name} not found at {path} for manifest hashing.")
+            raise FileNotFoundError(f"Missing required artifact {name} at {path}")
 
     with open(OUT_MANIFEST, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     logger.info(f"Successfully generated {OUT_MANIFEST}")
+    return manifest
 
 
 def load_artifacts():
@@ -87,6 +88,8 @@ def load_artifacts():
         raise FileNotFoundError(f"Missing required deployment artifact: {METRICS_DEPLOYED_JSON}")
     if not METRICS_DEPLOYED_BY_CROP.exists():
         raise FileNotFoundError(f"Missing required deployment artifact: {METRICS_DEPLOYED_BY_CROP}")
+    if not FEATURE_STORE_CSV.exists():
+        raise FileNotFoundError(f"Missing required feature store artifact: {FEATURE_STORE_CSV}")
 
     with open(METRICS_DEPLOYED_JSON, "r", encoding="utf-8") as f:
         metrics_deployed = json.load(f)
@@ -97,20 +100,29 @@ def load_artifacts():
     crop_df = pd.read_csv(METRICS_DEPLOYED_BY_CROP)
     lb_df = pd.read_csv(LEADERBOARD_CSV) if LEADERBOARD_CSV.exists() else pd.DataFrame()
 
-    fs_stats = {"total": 5218, "complete": 4554, "incomplete": 664}
-    if FEATURE_STORE_CSV.exists():
-        fs_df = pd.read_csv(FEATURE_STORE_CSV)
-        fs_stats["total"] = len(fs_df)
-        if "is_complete" in fs_df.columns:
-            fs_stats["complete"] = int(fs_df["is_complete"].sum())
-            fs_stats["incomplete"] = fs_stats["total"] - fs_stats["complete"]
+    fs_df = pd.read_csv(FEATURE_STORE_CSV)
+    fs_stats = {
+        "total": len(fs_df),
+        "complete": int(fs_df["is_complete"].sum()) if "is_complete" in fs_df.columns else len(fs_df),
+        "incomplete": int((~fs_df["is_complete"]).sum()) if "is_complete" in fs_df.columns else 0
+    }
 
     return metrics_deployed, mondrian, crop_df, lb_df, fs_stats
 
 
 def generate_reports():
     logger.info("Loading deployment artifacts for dynamic report generation...")
+    # First generate manifest so hashes are current
+    manifest = generate_manifest()
     metrics_deployed, mondrian, crop_df, lb_df, fs_stats = load_artifacts()
+
+    manifest_table_lines = [
+        "| Artifact File | Relative Path | Size (Bytes) | SHA-256 Checksum |",
+        "|:---|:---|:---:|:---|",
+    ]
+    for name, item in manifest["artifacts"].items():
+        manifest_table_lines.append(f"| `{name}` | `{item['path']}` | {item['size_bytes']:,} | `{item['sha256']}` |")
+    manifest_table_md = "\n".join(manifest_table_lines)
 
     by_h = metrics_deployed["by_horizon"]
     macro_h = metrics_deployed["macro_averages"]
@@ -124,6 +136,17 @@ def generate_reports():
     m1_w = mondrian_h["1-Day"]["macro_interval_width_pct"]
     m7_w = mondrian_h["7-Day"]["macro_interval_width_pct"]
     m30_w = mondrian_h["30-Day"]["macro_interval_width_pct"]
+
+    # Format dynamic conformal disclosures
+    disclosure_lines = []
+    for h in ["1-Day", "7-Day", "30-Day"]:
+        below = mondrian_h.get(h, {}).get("crops_below_95", [])
+        if below:
+            crops_str = ", ".join([f"{item['crop']} ({item['coverage']:.2f}%)" for item in below])
+            disclosure_lines.append(f"- **{h}:** {crops_str}")
+        else:
+            disclosure_lines.append(f"- **{h}:** None (100% of crops achieved ≥95% coverage)")
+    conformal_disclosure_md = "\n".join(disclosure_lines)
 
     # 1. Format Per-Crop Table for 7-Day (Deployed)
     c7 = crop_df[crop_df["Horizon"] == "7-Day"].sort_values(by="Crop")
@@ -234,9 +257,7 @@ Generated strictly from `data/metrics_by_crop.csv`:
 
 ### Conformal Coverage Disclosures (<95% Threshold)
 Mondrian calibration on validation complete support achieves macro average coverage $\\ge 95%$ across all horizons ({m1_cov:.2f}% 1D, {m7_cov:.2f}% 7D, {m30_cov:.2f}% 30D). Specific commodities with high volatility fall below 95%:
-- **1-Day:** Kabuli Chana (92.6%), Wheat (94.94%)
-- **7-Day:** Kabuli Chana (91.1%), Wheat (93.29%)
-- **30-Day:** Kabuli Chana (91.7%), Wheat (88.4%)
+{conformal_disclosure_md}
 
 All other commodities achieve $\\ge 95%$ empirical coverage.
 
@@ -256,6 +277,14 @@ Generated strictly from `data/master_model_leaderboard.csv`:
 - **Fully Supported Complete Pairs (100% 48 features non-null):** {fs_stats['complete']:,} ({fs_stats['complete']/fs_stats['total']*100:.1f}%)
 - **Unsupported Incomplete Pairs (<30d trading history):** {fs_stats['incomplete']:,} ({fs_stats['incomplete']/fs_stats['total']*100:.1f}%) -> strictly returns HTTP 422 (`insufficient_data`)
 - **Zero-Fill Prohibition:** Production inference strictly enforces a zero-fill prohibition, returning an explicit error for incomplete rows and maintaining complete-feature parity between offline benchmarks and online serving.
+
+---
+
+## 6. CRYPTOGRAPHIC ARTIFACT INTEGRITY MANIFEST
+
+Generated dynamically from `data/report_manifest.json`:
+
+{manifest_table_md}
 """
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -344,6 +373,14 @@ python scripts/evaluate_deployed.py
 # 4. Regenerate reports and cryptographic manifest
 python scripts/generate_audit_reports.py
 ```
+
+---
+
+## 5. CRYPTOGRAPHIC ARTIFACT INTEGRITY MANIFEST
+
+Generated dynamically from `data/report_manifest.json`:
+
+{manifest_table_md}
 """
 
     with open(OUT_AUDIT_REPORT, "w", encoding="utf-8") as f:

@@ -50,8 +50,6 @@ st.session_state["display_mode"] = display_mode
 
 GEO_PATH = Path("data/raw/geography/market_master.csv")
 PREDS_PATH = Path("data/deployed_test_predictions.csv")
-if not PREDS_PATH.exists():
-    PREDS_PATH = Path("data/test_predictions.csv")
 LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
 
 geo_df = pd.read_csv(GEO_PATH) if GEO_PATH.exists() else pd.DataFrame()
