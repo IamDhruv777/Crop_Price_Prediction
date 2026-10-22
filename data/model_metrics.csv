@@ -1,2 +1,2 @@
-Model,RMSE,MAE,MAPE,R2,Trust_Score,Directional_Accuracy,Precision,Recall,F1_Score,Train_Rows,Val_Rows,Test_Rows
-Tuned XGBoost (Unified Multi-Source),675.48,456.14,0.0983,0.8812,90.2,0.5495,0.5326,0.84,0.6519,186073,39873,39873
+Model,RMSE,MAE,MAPE,R2,Trust_Score,Tolerance_10,Coverage_95,Directional_Accuracy,F1_Score,Train_Rows,Val_Rows,Test_Rows
+Super Ensemble (Stacking Meta-Learner),332.22,147.98,0.0426,0.9779,95.74,90.78,96.46,0.49229999999999996,0.445,658037,263222,326848

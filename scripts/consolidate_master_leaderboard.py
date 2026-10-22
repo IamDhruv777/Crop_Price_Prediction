@@ -92,6 +92,11 @@ def consolidate():
     master_df = pd.concat(dfs, ignore_index=True)
 
     # Standardize Enterprise Metric Names (Computed, never hardcoded)
+    if "Tolerance_10" in master_df.columns:
+        master_df["Tolerance_10pct"] = master_df["Tolerance_10pct"].combine_first(master_df["Tolerance_10"]) if "Tolerance_10pct" in master_df.columns else master_df["Tolerance_10"]
+    if "Coverage_95" in master_df.columns:
+        master_df["Conformal_Coverage_95"] = master_df["Conformal_Coverage_95"].combine_first(master_df["Coverage_95"]) if "Conformal_Coverage_95" in master_df.columns else master_df["Coverage_95"]
+
     if "MAPE" in master_df.columns:
         master_df["Relative_Accuracy"] = np.round(100.0 - master_df["MAPE"].astype(float), 2)
         master_df["Trust_Score"] = np.round(100.0 - master_df["MAPE"].astype(float), 1)

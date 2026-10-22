@@ -83,6 +83,13 @@ class CropPricePredictor:
                 logger.info(f"Loaded dedicated champion model: {crop_path}")
             except Exception as e:
                 logger.warning(f"Error loading {crop_path}: {e}")
+        elif xgb_path.exists():
+            try:
+                model = joblib.load(xgb_path)
+                model_name = "Tuned XGBoost Regressor"
+                logger.info(f"Loaded XGBoost model: {xgb_path}")
+            except Exception as e:
+                logger.warning(f"Error loading {xgb_path}: {e}")
         elif ensemble_path.exists():
             try:
                 model = joblib.load(ensemble_path)
@@ -90,12 +97,6 @@ class CropPricePredictor:
                 logger.info(f"Loaded super ensemble: {ensemble_path}")
             except Exception as e:
                 logger.warning(f"Error loading {ensemble_path}: {e}")
-        elif xgb_path.exists():
-            try:
-                model = joblib.load(xgb_path)
-                model_name = "Tuned XGBoost Regressor"
-            except Exception as e:
-                logger.warning(f"Error loading {xgb_path}: {e}")
                 
         # Lookup metrics from leaderboard
         lb = self._get_leaderboard()
