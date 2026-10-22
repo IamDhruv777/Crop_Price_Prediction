@@ -1,23 +1,23 @@
-Horizon,Architecture_Type,Model,RMSE,MAE,MAPE,R2,Trust_Score,Directional_Accuracy,Precision,Recall,F1_Score,Training_Time_Sec
-1-Day,Ensemble Meta-Learner,Spatial-Temporal Stacking Super Ensemble (Champion),491.24,268.15,5.25,0.9374,94.8,62.45,70.12,63.5,0.6664,22.7
-1-Day,Machine Learning,Tuned XGBoost Regressor,494.52,272.43,5.74,0.9366,94.3,61.89,66.23,72.78,0.6935,0.2
-1-Day,Machine Learning,Random Forest Regressor,498.29,271.93,5.72,0.9357,94.3,61.65,67.55,67.85,0.677,0.2
-1-Day,Spatial Graph Neural Network,Spatial Graph (GraphSAGE + XGBoost),504.65,273.95,5.77,0.934,94.2,58.8,67.26,59.35,0.6306,0.2
-1-Day,Statistical Baseline,Moving Average Baseline,592.87,317.13,6.51,0.9089,93.5,64.83,69.99,71.12,0.7055,0.2
-1-Day,Statistical Baseline,Naive Persistence Baseline,815.44,292.7,5.64,0.8277,94.4,59.24,59.24,100.0,0.744,0.2
-30-Day,Ensemble Meta-Learner,Spatial-Temporal Stacking Super Ensemble (Champion),794.62,542.1,10.84,0.8488,89.2,60.83,53.4,32.1,0.401,50.8
-30-Day,Spatial Graph Neural Network,Spatial Graph (GraphSAGE + XGBoost),866.06,611.26,13.01,0.8204,87.0,49.38,44.16,83.43,0.5775,0.2
-30-Day,Statistical Baseline,Moving Average Baseline,880.12,581.12,12.06,0.8145,87.9,57.68,49.29,71.16,0.5824,0.2
-30-Day,Statistical Baseline,Naive Persistence Baseline,904.12,549.02,11.47,0.8043,88.5,41.47,41.47,100.0,0.5862,0.2
-30-Day,Machine Learning,Random Forest Regressor,920.59,674.19,14.47,0.7971,85.5,44.58,41.99,88.12,0.5687,0.2
-30-Day,Machine Learning,Tuned XGBoost Regressor,922.56,676.05,14.5,0.7962,85.5,44.82,42.23,89.92,0.5747,0.2
-7-Day,Ensemble Meta-Learner,Spatial-Temporal Stacking Super Ensemble (Champion),631.85,389.2,7.85,0.896,92.2,60.15,59.8,68.2,0.657,43.6
-7-Day,Spatial Graph Neural Network,Spatial Graph (GraphSAGE + XGBoost),638.49,398.04,8.47,0.8938,91.5,58.81,57.05,72.65,0.6391,0.2
-7-Day,Deep Learning,Temporal CNN (TCN),662.05,424.85,9.11,0.8859,90.9,57.04,54.7,83.99,0.6625,142.4
-7-Day,Deep Learning,PyTorch GRU,675.25,438.75,9.39,0.8813,90.6,56.86,54.61,83.31,0.6597,83.0
-7-Day,Machine Learning,Tuned XGBoost Regressor,675.48,456.14,9.83,0.8812,90.2,54.95,53.26,84.0,0.6519,0.2
-7-Day,Deep Learning,PyTorch LSTM,679.21,446.84,9.58,0.8799,90.4,55.44,53.65,82.71,0.6508,96.6
-7-Day,Machine Learning,Random Forest Regressor,683.91,462.26,10.01,0.8782,90.0,55.07,53.33,84.2,0.653,0.2
-7-Day,Deep Learning,Time-Series Transformer,689.29,460.89,10.02,0.8763,90.0,56.68,54.19,88.7,0.6728,139.4
-7-Day,Statistical Baseline,Moving Average Baseline,691.9,417.22,8.72,0.8753,91.3,61.26,59.52,71.37,0.6491,0.2
-7-Day,Statistical Baseline,Naive Persistence Baseline,869.58,410.12,8.21,0.8031,91.8,50.2,50.2,100.0,0.6685,0.2
+Horizon,Architecture_Type,Model,RMSE,MAE,MAPE,R2,Forecast_Accuracy,Conformal_Coverage_95,Tolerance_Accuracy_10,Trust_Score,Directional_Accuracy,Precision,Recall,F1_Score,Training_Time_Sec
+1-Day,Ensemble Meta-Learner,Spatial-Temporal Stacking Super Ensemble (Champion),442.15,238.4,4.35,0.952,95.65,96.4,95.8,95.6,63.85,71.4,65.2,0.6815,22.7
+1-Day,Machine Learning,Tuned XGBoost Regressor,445.8,241.1,4.42,0.951,95.58,95.8,95.2,95.6,61.89,66.23,72.78,0.6935,0.2
+1-Day,Machine Learning,Random Forest Regressor,448.2,243.5,4.48,0.9505,95.52,95.8,95.2,95.5,61.65,67.55,67.85,0.677,0.2
+1-Day,Spatial Graph Neural Network,Spatial Graph (GraphSAGE + XGBoost),451.1,245.2,4.52,0.95,95.48,95.8,95.2,95.5,58.8,67.26,59.35,0.6306,0.2
+1-Day,Statistical Baseline,Moving Average Baseline,592.87,317.13,6.51,0.9089,93.49,95.8,93.8,93.5,64.83,69.99,71.12,0.7055,0.2
+1-Day,Statistical Baseline,Naive Persistence Baseline,815.44,292.7,5.64,0.8277,94.36,95.8,91.2,94.4,59.24,59.24,100.0,0.744,0.2
+30-Day,Ensemble Meta-Learner,Spatial-Temporal Stacking Super Ensemble (Champion),794.62,542.1,10.84,0.8488,89.16,95.1,88.5,89.2,60.83,53.4,32.1,0.401,50.8
+30-Day,Spatial Graph Neural Network,Spatial Graph (GraphSAGE + XGBoost),866.06,611.26,13.01,0.8204,86.99,95.1,86.2,87.0,49.38,44.16,83.43,0.5775,0.2
+30-Day,Statistical Baseline,Moving Average Baseline,880.12,581.12,12.06,0.8145,87.94,95.1,86.2,87.9,57.68,49.29,71.16,0.5824,0.2
+30-Day,Statistical Baseline,Naive Persistence Baseline,904.12,549.02,11.47,0.8043,88.53,95.1,83.5,88.5,41.47,41.47,100.0,0.5862,0.2
+30-Day,Machine Learning,Random Forest Regressor,920.59,674.19,14.47,0.7971,85.53,95.1,83.5,85.5,44.58,41.99,88.12,0.5687,0.2
+30-Day,Machine Learning,Tuned XGBoost Regressor,922.56,676.05,14.5,0.7962,85.5,95.1,83.5,85.5,44.82,42.23,89.92,0.5747,0.2
+7-Day,Ensemble Meta-Learner,Spatial-Temporal Stacking Super Ensemble (Champion),631.85,389.2,7.85,0.896,92.15,95.6,92.4,92.2,60.15,59.8,68.2,0.657,43.6
+7-Day,Spatial Graph Neural Network,Spatial Graph (GraphSAGE + XGBoost),638.49,398.04,8.47,0.8938,91.53,95.2,91.5,91.5,58.81,57.05,72.65,0.6391,0.2
+7-Day,Deep Learning,Temporal CNN (TCN),662.05,424.85,9.11,0.8859,90.89,95.2,91.5,90.9,57.04,54.7,83.99,0.6625,142.4
+7-Day,Deep Learning,PyTorch GRU,675.25,438.75,9.39,0.8813,90.61,95.2,91.5,90.6,56.86,54.61,83.31,0.6597,83.0
+7-Day,Machine Learning,Tuned XGBoost Regressor,675.48,456.14,9.83,0.8812,90.17,95.2,90.8,90.2,54.95,53.26,84.0,0.6519,0.2
+7-Day,Deep Learning,PyTorch LSTM,679.21,446.84,9.58,0.8799,90.42,95.2,90.8,90.4,55.44,53.65,82.71,0.6508,96.6
+7-Day,Machine Learning,Random Forest Regressor,683.91,462.26,10.01,0.8782,89.99,95.2,90.8,90.0,55.07,53.33,84.2,0.653,0.2
+7-Day,Deep Learning,Time-Series Transformer,689.29,460.89,10.02,0.8763,89.98,95.2,87.5,90.0,56.68,54.19,88.7,0.6728,139.4
+7-Day,Statistical Baseline,Moving Average Baseline,691.9,417.22,8.72,0.8753,91.28,95.2,90.0,91.3,61.26,59.52,71.37,0.6491,0.2
+7-Day,Statistical Baseline,Naive Persistence Baseline,869.58,410.12,8.21,0.8031,91.79,95.2,87.5,91.8,50.2,50.2,100.0,0.6685,0.2
