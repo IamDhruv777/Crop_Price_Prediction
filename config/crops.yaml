@@ -1,0 +1,129 @@
+# ============================================================
+# CROP CONFIGURATION
+# ============================================================
+
+crops:
+  Onion:
+    display_name: "Onion"
+    aliases:
+      - "Pyaz"
+      - "Kanda"
+      - "Onion(Bulb)"
+    seasons:
+      - Kharif
+      - Rabi
+      - Summer
+    unit: "Quintal"
+    typical_price_range_inr:
+      min: 200
+      max: 8000
+    perishable: true
+    storage_life_days: 90
+
+  Tomato:
+    display_name: "Tomato"
+    aliases:
+      - "Tamatar"
+      - "Tomato (Deshi)"
+      - "Tomato(Deshi)"
+    seasons:
+      - Kharif
+      - Rabi
+      - Summer
+    unit: "Quintal"
+    typical_price_range_inr:
+      min: 100
+      max: 12000
+    perishable: true
+    storage_life_days: 7
+
+  Soybean:
+    display_name: "Soybean"
+    aliases:
+      - "Soya bean"
+      - "Soyabean"
+      - "Soya Bean"
+      - "Soybean(Yellow)"
+    seasons:
+      - Kharif
+    unit: "Quintal"
+    typical_price_range_inr:
+      min: 1500
+      max: 8000
+    perishable: false
+    storage_life_days: 365
+
+  Potato:
+    display_name: "Potato"
+    aliases:
+      - "Aloo"
+      - "Batata"
+    seasons:
+      - Rabi
+    unit: "Quintal"
+    typical_price_range_inr:
+      min: 200
+      max: 3000
+    perishable: false
+    storage_life_days: 90
+
+  Wheat:
+    display_name: "Wheat"
+    aliases:
+      - "Gehun"
+      - "Gehu"
+    seasons:
+      - Rabi
+    unit: "Quintal"
+    typical_price_range_inr:
+      min: 1500
+      max: 3500
+    perishable: false
+    storage_life_days: 730
+
+  Rice:
+    display_name: "Rice"
+    aliases:
+      - "Dhan(Paddy)"
+      - "Paddy"
+      - "Common Paddy"
+    seasons:
+      - Kharif
+    unit: "Quintal"
+    typical_price_range_inr:
+      min: 1000
+      max: 4000
+    perishable: false
+    storage_life_days: 365
+
+  Maize:
+    display_name: "Maize"
+    aliases:
+      - "Makka"
+      - "Corn"
+      - "Maize(white)"
+      - "Maize(Yellow)"
+    seasons:
+      - Kharif
+      - Rabi
+    unit: "Quintal"
+    typical_price_range_inr:
+      min: 800
+      max: 2500
+    perishable: false
+    storage_life_days: 180
+
+# Season definitions (approximate months)
+seasons:
+  Kharif:
+    months: [6, 7, 8, 9, 10, 11]
+    description: "June to November - monsoon crop"
+  Rabi:
+    months: [12, 1, 2, 3, 4]
+    description: "December to April - winter crop"
+  Summer:
+    months: [3, 4, 5, 6]
+    description: "March to June - summer crop"
+  Zaid:
+    months: [3, 4, 5]
+    description: "March to May - short summer season"

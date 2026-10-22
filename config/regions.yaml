@@ -1,0 +1,125 @@
+# ============================================================
+# REGIONAL CONFIGURATION
+# ============================================================
+
+regions:
+  Maharashtra:
+    region_id: MH
+    display_name: "Maharashtra"
+    capital: Mumbai
+    zone: Western India
+    latitude_center: 19.7515
+    longitude_center: 75.7139
+    key_markets:
+      - name: Lasalgaon
+        district: Nashik
+        latitude: 20.1167
+        longitude: 74.0167
+        commodities: [Onion]
+        notes: "Asia's largest onion market"
+      - name: Nashik
+        district: Nashik
+        latitude: 19.9975
+        longitude: 73.7898
+        commodities: [Onion, Tomato, Grapes]
+      - name: Pune
+        district: Pune
+        latitude: 18.5204
+        longitude: 73.8567
+        commodities: [Onion, Tomato, Potato]
+      - name: Solapur
+        district: Solapur
+        latitude: 17.6862
+        longitude: 75.9079
+        commodities: [Onion, Soybean]
+      - name: Aurangabad
+        district: Aurangabad
+        latitude: 19.8762
+        longitude: 75.3433
+        commodities: [Onion, Soybean]
+      - name: Latur
+        district: Latur
+        latitude: 18.4088
+        longitude: 76.5604
+        commodities: [Soybean, Tur/Arhar]
+      - name: Nanded
+        district: Nanded
+        latitude: 19.1383
+        longitude: 77.3210
+        commodities: [Soybean]
+      - name: Ahmednagar
+        district: Ahmednagar
+        latitude: 19.0952
+        longitude: 74.7496
+        commodities: [Onion, Tomato]
+      - name: Kolhapur
+        district: Kolhapur
+        latitude: 16.7050
+        longitude: 74.2433
+        commodities: [Onion, Sugarcane]
+      - name: Satara
+        district: Satara
+        latitude: 17.6805
+        longitude: 74.0183
+        commodities: [Onion, Tomato]
+
+  Madhya_Pradesh:
+    region_id: MP
+    display_name: "Madhya Pradesh"
+    capital: Bhopal
+    zone: Central India
+    latitude_center: 22.9734
+    longitude_center: 78.6569
+    key_markets:
+      - name: Indore
+        district: Indore
+        latitude: 22.7196
+        longitude: 75.8577
+        commodities: [Soybean, Onion, Wheat]
+      - name: Bhopal
+        district: Bhopal
+        latitude: 23.2599
+        longitude: 77.4126
+        commodities: [Soybean, Wheat]
+
+  Karnataka:
+    region_id: KA
+    display_name: "Karnataka"
+    capital: Bengaluru
+    zone: Southern India
+    latitude_center: 15.3173
+    longitude_center: 75.7139
+    key_markets:
+      - name: Bengaluru
+        district: Bangalore Urban
+        latitude: 12.9716
+        longitude: 77.5946
+        commodities: [Tomato, Onion, Potato]
+
+  Rajasthan:
+    region_id: RJ
+    display_name: "Rajasthan"
+    capital: Jaipur
+    zone: Northwestern India
+    latitude_center: 27.0238
+    longitude_center: 74.2179
+    key_markets:
+      - name: Jaipur
+        district: Jaipur
+        latitude: 26.9124
+        longitude: 75.7873
+        commodities: [Onion, Wheat]
+
+  Gujarat:
+    region_id: GJ
+    display_name: "Gujarat"
+    capital: Gandhinagar
+    zone: Western India
+    latitude_center: 22.2587
+    longitude_center: 71.1924
+    key_markets:
+      - name: Ahmedabad
+        district: Ahmedabad
+        latitude: 23.0225
+        longitude: 72.5714
+        commodities: [Onion, Cotton]

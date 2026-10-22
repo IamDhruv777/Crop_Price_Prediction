@@ -1,0 +1,332 @@
+{
+  "Lasalgaon": [
+    {
+      "neighbor": "Nashik",
+      "distance_km": 27.15,
+      "weight": 0.6962
+    },
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 137.1,
+      "weight": 0.1607
+    },
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 141.17,
+      "weight": 0.1522
+    },
+    {
+      "neighbor": "Pune",
+      "distance_km": 178.29,
+      "weight": 0.0928
+    }
+  ],
+  "Nashik": [
+    {
+      "neighbor": "Lasalgaon",
+      "distance_km": 27.15,
+      "weight": 0.6962
+    },
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 142.06,
+      "weight": 0.1504
+    },
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 162.95,
+      "weight": 0.1139
+    },
+    {
+      "neighbor": "Pune",
+      "distance_km": 164.4,
+      "weight": 0.1117
+    }
+  ],
+  "Pune": [
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 113.66,
+      "weight": 0.2197
+    },
+    {
+      "neighbor": "Nashik",
+      "distance_km": 164.4,
+      "weight": 0.1117
+    },
+    {
+      "neighbor": "Lasalgaon",
+      "distance_km": 178.29,
+      "weight": 0.0928
+    },
+    {
+      "neighbor": "Sangli",
+      "distance_km": 200.74,
+      "weight": 0.0688
+    }
+  ],
+  "Solapur": [
+    {
+      "neighbor": "Latur",
+      "distance_km": 105.9,
+      "weight": 0.2437
+    },
+    {
+      "neighbor": "Sangli",
+      "distance_km": 168.62,
+      "weight": 0.1056
+    },
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 198.7,
+      "weight": 0.0707
+    },
+    {
+      "neighbor": "Kolhapur",
+      "distance_km": 207.77,
+      "weight": 0.0626
+    }
+  ],
+  "Aurangabad": [
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 106.84,
+      "weight": 0.2406
+    },
+    {
+      "neighbor": "Jalgaon",
+      "distance_km": 127.87,
+      "weight": 0.1818
+    },
+    {
+      "neighbor": "Lasalgaon",
+      "distance_km": 141.17,
+      "weight": 0.1522
+    },
+    {
+      "neighbor": "Nashik",
+      "distance_km": 162.95,
+      "weight": 0.1139
+    }
+  ],
+  "Latur": [
+    {
+      "neighbor": "Solapur",
+      "distance_km": 105.9,
+      "weight": 0.2437
+    },
+    {
+      "neighbor": "Nanded",
+      "distance_km": 113.98,
+      "weight": 0.2188
+    },
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 205.37,
+      "weight": 0.0647
+    },
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 207.29,
+      "weight": 0.063
+    }
+  ],
+  "Nanded": [
+    {
+      "neighbor": "Latur",
+      "distance_km": 113.98,
+      "weight": 0.2188
+    },
+    {
+      "neighbor": "Amravati",
+      "distance_km": 205.71,
+      "weight": 0.0644
+    },
+    {
+      "neighbor": "Solapur",
+      "distance_km": 219.76,
+      "weight": 0.0534
+    },
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 222.93,
+      "weight": 0.0512
+    }
+  ],
+  "Ahmednagar": [
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 106.84,
+      "weight": 0.2406
+    },
+    {
+      "neighbor": "Pune",
+      "distance_km": 113.66,
+      "weight": 0.2197
+    },
+    {
+      "neighbor": "Lasalgaon",
+      "distance_km": 137.1,
+      "weight": 0.1607
+    },
+    {
+      "neighbor": "Nashik",
+      "distance_km": 142.06,
+      "weight": 0.1504
+    }
+  ],
+  "Kolhapur": [
+    {
+      "neighbor": "Sangli",
+      "distance_km": 39.56,
+      "weight": 0.5901
+    },
+    {
+      "neighbor": "Pune",
+      "distance_km": 205.98,
+      "weight": 0.0642
+    },
+    {
+      "neighbor": "Solapur",
+      "distance_km": 207.77,
+      "weight": 0.0626
+    },
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 271.12,
+      "weight": 0.0269
+    }
+  ],
+  "Sangli": [
+    {
+      "neighbor": "Kolhapur",
+      "distance_km": 39.56,
+      "weight": 0.5901
+    },
+    {
+      "neighbor": "Solapur",
+      "distance_km": 168.62,
+      "weight": 0.1056
+    },
+    {
+      "neighbor": "Pune",
+      "distance_km": 200.74,
+      "weight": 0.0688
+    },
+    {
+      "neighbor": "Ahmednagar",
+      "distance_km": 250.02,
+      "weight": 0.0357
+    }
+  ],
+  "Jalgaon": [
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 127.87,
+      "weight": 0.1818
+    },
+    {
+      "neighbor": "Lasalgaon",
+      "distance_km": 188.99,
+      "weight": 0.0805
+    },
+    {
+      "neighbor": "Indore",
+      "distance_km": 192.77,
+      "weight": 0.0765
+    },
+    {
+      "neighbor": "Nashik",
+      "distance_km": 216.12,
+      "weight": 0.056
+    }
+  ],
+  "Nagpur": [
+    {
+      "neighbor": "Amravati",
+      "distance_km": 137.77,
+      "weight": 0.1593
+    },
+    {
+      "neighbor": "Nanded",
+      "distance_km": 289.58,
+      "weight": 0.021
+    },
+    {
+      "neighbor": "Jalgaon",
+      "distance_km": 366.12,
+      "weight": 0.0076
+    },
+    {
+      "neighbor": "Indore",
+      "distance_km": 376.36,
+      "weight": 0.0066
+    }
+  ],
+  "Amravati": [
+    {
+      "neighbor": "Nagpur",
+      "distance_km": 137.77,
+      "weight": 0.1593
+    },
+    {
+      "neighbor": "Nanded",
+      "distance_km": 205.71,
+      "weight": 0.0644
+    },
+    {
+      "neighbor": "Jalgaon",
+      "distance_km": 230.32,
+      "weight": 0.0464
+    },
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 279.98,
+      "weight": 0.0239
+    }
+  ],
+  "Indore": [
+    {
+      "neighbor": "Ujjain",
+      "distance_km": 51.3,
+      "weight": 0.5046
+    },
+    {
+      "neighbor": "Jalgaon",
+      "distance_km": 192.77,
+      "weight": 0.0765
+    },
+    {
+      "neighbor": "Amravati",
+      "distance_km": 280.4,
+      "weight": 0.0238
+    },
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 320.63,
+      "weight": 0.0139
+    }
+  ],
+  "Ujjain": [
+    {
+      "neighbor": "Indore",
+      "distance_km": 51.3,
+      "weight": 0.5046
+    },
+    {
+      "neighbor": "Jalgaon",
+      "distance_km": 242.28,
+      "weight": 0.0395
+    },
+    {
+      "neighbor": "Amravati",
+      "distance_km": 322.62,
+      "weight": 0.0135
+    },
+    {
+      "neighbor": "Aurangabad",
+      "distance_km": 369.85,
+      "weight": 0.0072
+    }
+  ]
+}

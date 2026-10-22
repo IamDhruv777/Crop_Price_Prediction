@@ -1,0 +1,247 @@
+# ============================================================
+# MODEL CONFIGURATION
+# ============================================================
+
+# Which models to enable/train
+enabled_models:
+  naive: true
+  moving_average: true
+  seasonal_naive: true
+  arima: true
+  sarima: true
+  random_forest: true
+  xgboost: true
+  lstm: true
+  gru: true
+  tcn: true
+  transformer: true
+  graphsage: true
+  spatial_temporal: true   # GraphSAGE + GRU
+
+# Primary model selection metric
+selection_metric: rmse
+secondary_metric: mae
+
+# Fallback order when best model fails
+fallback_order:
+  - spatial_temporal
+  - xgboost
+  - random_forest
+  - sarima
+  - moving_average
+  - naive
+
+# ============================================================
+# BASELINE MODELS
+# ============================================================
+naive:
+  description: "Naive forecast: prediction(t+h) = price(t)"
+
+moving_average:
+  windows: [3, 7, 14, 30]
+  default_window: 7
+  select_window_via: validation
+
+seasonal_naive:
+  seasonality_period: 7  # weekly
+
+# ============================================================
+# ARIMA
+# ============================================================
+arima:
+  max_p: 5
+  max_d: 2
+  max_q: 5
+  auto: true   # use auto_arima if available
+  information_criterion: aic
+
+# ============================================================
+# SARIMA
+# ============================================================
+sarima:
+  max_p: 3
+  max_d: 2
+  max_q: 3
+  max_P: 2
+  max_D: 1
+  max_Q: 2
+  seasonal_periods: [7, 30, 365]
+  information_criterion: aic
+
+# ============================================================
+# RANDOM FOREST
+# ============================================================
+random_forest:
+  n_estimators: 200
+  max_depth: 15
+  min_samples_split: 5
+  min_samples_leaf: 2
+  max_features: 0.5
+  n_jobs: -1
+  random_state: 42
+  # Optuna tuning ranges
+  tuning:
+    n_estimators: [50, 500]
+    max_depth: [3, 25]
+    min_samples_split: [2, 20]
+    min_samples_leaf: [1, 10]
+    max_features: [0.3, 1.0]
+    n_trials: 30
+
+# ============================================================
+# XGBOOST
+# ============================================================
+xgboost:
+  n_estimators: 500
+  max_depth: 6
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 3
+  gamma: 0.1
+  reg_alpha: 0.1
+  reg_lambda: 1.0
+  early_stopping_rounds: 50
+  eval_metric: rmse
+  tree_method: hist
+  random_state: 42
+  # Optuna tuning ranges
+  tuning:
+    n_estimators: [100, 1000]
+    max_depth: [3, 10]
+    learning_rate: [0.01, 0.3]
+    subsample: [0.5, 1.0]
+    colsample_bytree: [0.5, 1.0]
+    min_child_weight: [1, 10]
+    gamma: [0.0, 1.0]
+    reg_alpha: [0.0, 2.0]
+    reg_lambda: [0.5, 3.0]
+    n_trials: 50
+
+# ============================================================
+# LSTM
+# ============================================================
+lstm:
+  sequence_length: 30
+  hidden_units: 128
+  num_layers: 2
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 64
+  epochs: 100
+  early_stopping_patience: 15
+  gradient_clip: 1.0
+  random_state: 42
+  # Tuning ranges
+  tuning:
+    sequence_length: [7, 60]
+    hidden_units: [32, 256]
+    num_layers: [1, 4]
+    dropout: [0.0, 0.5]
+    learning_rate: [0.0001, 0.01]
+    batch_size: [16, 128]
+    n_trials: 20
+
+# ============================================================
+# GRU
+# ============================================================
+gru:
+  sequence_length: 30
+  hidden_units: 128
+  num_layers: 2
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 64
+  epochs: 100
+  early_stopping_patience: 15
+  gradient_clip: 1.0
+  random_state: 42
+  tuning:
+    sequence_length: [7, 60]
+    hidden_units: [32, 256]
+    num_layers: [1, 4]
+    dropout: [0.0, 0.5]
+    learning_rate: [0.0001, 0.01]
+    n_trials: 20
+
+# ============================================================
+# TEMPORAL CNN (TCN)
+# ============================================================
+tcn:
+  sequence_length: 30
+  num_filters: 64
+  kernel_size: 3
+  num_layers: 4
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 64
+  epochs: 100
+  early_stopping_patience: 15
+  dilations: [1, 2, 4, 8, 16]
+  random_state: 42
+
+# ============================================================
+# TRANSFORMER
+# ============================================================
+transformer:
+  sequence_length: 30
+  d_model: 128
+  nhead: 8
+  num_encoder_layers: 3
+  dim_feedforward: 256
+  dropout: 0.1
+  learning_rate: 0.0005
+  batch_size: 64
+  epochs: 100
+  early_stopping_patience: 15
+  random_state: 42
+
+# ============================================================
+# GRAPHSAGE
+# ============================================================
+graphsage:
+  hidden_channels: 64
+  output_channels: 32
+  num_layers: 2
+  dropout: 0.2
+  aggregation: mean   # mean | max | attention
+  learning_rate: 0.001
+  epochs: 100
+  batch_size: 32
+  random_state: 42
+
+# ============================================================
+# SPATIAL-TEMPORAL (GraphSAGE + GRU)
+# ============================================================
+spatial_temporal:
+  graphsage_hidden: 64
+  graphsage_output: 32
+  gru_hidden: 128
+  gru_layers: 2
+  sequence_length: 30
+  dropout: 0.2
+  learning_rate: 0.001
+  batch_size: 32
+  epochs: 100
+  early_stopping_patience: 20
+  random_state: 42
+
+# ============================================================
+# UNCERTAINTY ESTIMATION
+# ============================================================
+uncertainty:
+  method: conformal  # conformal | bootstrap | residual
+  confidence_level: 0.95
+  calibration_size: 0.1   # fraction of validation set for calibration
+  n_bootstrap: 100        # for bootstrap method
+
+# ============================================================
+# HYPERPARAMETER TUNING
+# ============================================================
+tuning:
+  framework: optuna
+  n_trials_default: 30
+  timeout_seconds: 3600   # 1 hour max per model
+  direction: minimize     # minimize RMSE
+  pruner: median
+  sampler: tpe

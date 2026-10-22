@@ -1,0 +1,114 @@
+# ============================================================
+# CROP PRICE PREDICTION — .gitignore
+# ============================================================
+
+# Environment & Sensitive Files (CRITICAL: NEVER commit secrets or credentials)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+*.p12
+credentials*.json
+client_secrets*.json
+token*.json
+*.sqlite
+*.sqlite3
+*.db
+
+# Python bytecode & packages
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+*.egg-link
+.installed.cfg
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Heavy data directories & files
+data/interim/
+data/features/
+data/splits/
+data/backup_previous_results/
+data/processed/*
+!data/processed/historical_multi_crop_sample.csv
+data/raw/*
+!data/raw/geography/
+data/raw/geography/*
+!data/raw/geography/india_states_districts.json
+!data/raw/geography/market_master.csv
+!data/raw/weather/
+data/raw/weather/*
+!data/raw/weather/mandi_daily_weather_aligned.csv
+
+*.parquet
+*.feather
+*.pkl
+
+# Models (large binary checkpoints)
+models/trained/*.pt
+models/trained/*.pth
+models/trained/*.h5
+models/trained/*.pkl
+models/trained/*.joblib
+models/scalers/*.pkl
+models/encoders/*.pkl
+
+# Logs
+logs/
+*.log
+
+# Reports (large generated exports)
+reports/*.pdf
+reports/*.xlsx
+
+# IDE & OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MyPy & Linters
+.mypy_cache/
+.ruff_cache/
+
+# Optuna & MLflow tracking
+optuna.db
+mlruns/
+mlflow.db
+
+# Misc archives & temporary files
+*.tmp
+*.bak
+*.zip
+*.tar.gz
+*.rar
