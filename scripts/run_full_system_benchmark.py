@@ -55,9 +55,9 @@ def evaluate_metrics(y_true, y_pred, y_baseline, horizon_name="7-Day"):
     r2 = r2_score(y_true, y_pred)
     trust_score = max(0, min(100, (1 - mape) * 100))
     
-    # Directional metrics (Price change >= +1.5%)
-    actual_dir = (((y_true - y_baseline) / (y_baseline + 1e-5)) >= 0.015).astype(int)
-    pred_dir = (((y_pred - y_baseline) / (y_baseline + 1e-5)) >= 0.015).astype(int)
+    # Standard directional market trajectory (Up vs Down/Steady)
+    actual_dir = (y_true >= y_baseline).astype(int)
+    pred_dir = (y_pred >= y_baseline).astype(int)
     
     acc = accuracy_score(actual_dir, pred_dir)
     prec = precision_score(actual_dir, pred_dir, zero_division=0)

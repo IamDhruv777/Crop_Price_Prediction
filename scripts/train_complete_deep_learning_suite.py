@@ -163,7 +163,7 @@ def run_optimized_deep_learning_benchmark(epochs=15):
         "Time-Series Transformer": ResidualTransformer(input_dim)
     }
     
-    from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score
+    from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error, r2_score, accuracy_score, precision_score, recall_score, f1_score
     results = []
     
     y_true = test_df['target_price_7d'].values
@@ -173,7 +173,7 @@ def run_optimized_deep_learning_benchmark(epochs=15):
         logger.info(f"\n--- Training Optimized {name} across {epochs} Epochs ---")
         optimizer = torch.optim.AdamW(model.parameters(), lr=0.005, weight_decay=1e-4)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
-        loss_fn = nn.MSELoss()
+        loss_fn = nn.SmoothL1Loss(beta=0.5)
         
         start_t = time.time()
         for ep in range(1, epochs + 1):
@@ -189,7 +189,7 @@ def run_optimized_deep_learning_benchmark(epochs=15):
             scheduler.step()
                 
             if ep % 5 == 0 or ep == epochs:
-                logger.info(f"  {name} Epoch {ep:2d}/{epochs} | Residual MSE: {ep_loss/len(train_loader):.4f}")
+                logger.info(f"  {name} Epoch {ep:2d}/{epochs} | Residual SmoothL1 Loss: {ep_loss/len(train_loader):.4f}")
                 
         # Invert predictions: Predicted Price = Current Price + Predicted Residual Drift
         model.eval()
@@ -204,7 +204,14 @@ def run_optimized_deep_learning_benchmark(epochs=15):
         r2 = r2_score(y_true, preds)
         trust = max(0, min(100, (1 - mape) * 100))
         
-        logger.info(f"  {name} Evaluated -> RMSE: ₹{rmse:.2f}, MAPE: {mape*100:.2f}%, R2: {r2:.4f}, Trust: {trust:.1f}/100")
+        act_dir = (y_true >= cur_prices).astype(int)
+        pred_dir = (preds >= cur_prices).astype(int)
+        dir_acc = accuracy_score(act_dir, pred_dir)
+        prec = precision_score(act_dir, pred_dir, zero_division=0)
+        rec = recall_score(act_dir, pred_dir, zero_division=0)
+        f1 = f1_score(act_dir, pred_dir, zero_division=0)
+        
+        logger.info(f"  {name} Evaluated -> RMSE: Rs. {rmse:.2f}, MAPE: {mape*100:.2f}%, R2: {r2:.4f}, Trust: {trust:.1f}/100, DirAcc: {dir_acc*100:.1f}%, F1: {f1:.4f}")
         results.append({
             "Architecture_Type": "Deep Learning",
             "Model": name,
@@ -213,6 +220,10 @@ def run_optimized_deep_learning_benchmark(epochs=15):
             "MAPE": round(mape * 100, 2),
             "R2": round(r2, 4),
             "Trust_Score": round(trust, 1),
+            "Directional_Accuracy": round(dir_acc * 100, 2),
+            "Precision": round(prec * 100, 2),
+            "Recall": round(rec * 100, 2),
+            "F1_Score": round(f1, 4),
             "Training_Time_Sec": round(time.time() - start_t, 1)
         })
         

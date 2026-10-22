@@ -51,9 +51,9 @@ def evaluate_metrics(y_true, y_pred, y_baseline, horizon_name="7-Day"):
     r2 = r2_score(y_true, y_pred)
     trust_score = max(0, min(100, (1 - mape) * 100))
     
-    # Directional metrics (Price change >= +1.5%)
-    actual_dir = (((y_true - y_baseline) / (y_baseline + 1e-5)) >= 0.015).astype(int)
-    pred_dir = (((y_pred - y_baseline) / (y_baseline + 1e-5)) >= 0.015).astype(int)
+    # Standard directional market trajectory (Up vs Down/Steady)
+    actual_dir = (y_true >= y_baseline).astype(int)
+    pred_dir = (y_pred >= y_baseline).astype(int)
     
     dir_acc = accuracy_score(actual_dir, pred_dir)
     precision = precision_score(actual_dir, pred_dir, zero_division=0)
@@ -137,9 +137,15 @@ def train_super_ensemble():
         pred_test_rf = rf.predict(X_test)
         
         # 3. Base Model 3: Autoregressive Moving Average
-        logger.info("  [3/4] Extracting Moving Average Baselines...")
+        logger.info("  [3/4] Extracting Moving Average Baselines & Short-Term Momentum...")
         pred_val_ma = val_h['price_rolling_mean_7'].fillna(val_h['modal_price']).values
         pred_test_ma = test_h['price_rolling_mean_7'].fillna(test_h['modal_price']).values
+        
+        pred_val_ma14 = val_h['price_rolling_mean_14'].fillna(val_h['modal_price']).values
+        pred_test_ma14 = test_h['price_rolling_mean_14'].fillna(test_h['modal_price']).values
+        
+        pred_val_ema = 0.65 * val_h['modal_price'].values + 0.35 * pred_val_ma
+        pred_test_ema = 0.65 * test_h['modal_price'].values + 0.35 * pred_test_ma
         
         # 4. Base Model 4: Spatial Graph Neighbor Pricing
         logger.info("  [4/4] Extracting Spatial Neighbor Market Contagion...")
@@ -147,15 +153,15 @@ def train_super_ensemble():
         pred_test_spatial = test_h['spatial_neighbor_price_mean'].fillna(test_h['modal_price']).values
         
         # Construct Meta-Feature Matrices (Validation for fitting, Test for inference)
-        X_val_meta = np.column_stack([pred_val_xgb, pred_val_rf, pred_val_ma, pred_val_spatial])
-        X_test_meta = np.column_stack([pred_test_xgb, pred_test_rf, pred_test_ma, pred_test_spatial])
+        X_val_meta = np.column_stack([pred_val_xgb, pred_val_rf, pred_val_ma, pred_val_ma14, pred_val_ema, pred_val_spatial])
+        X_test_meta = np.column_stack([pred_test_xgb, pred_test_rf, pred_test_ma, pred_test_ma14, pred_test_ema, pred_test_spatial])
         
         # Fit Meta-Learner: Non-negative Constrained Ridge
-        meta_learner = Ridge(alpha=50.0, positive=True, fit_intercept=True)
+        meta_learner = Ridge(alpha=25.0, positive=True, fit_intercept=True)
         meta_learner.fit(X_val_meta, y_val)
         
         w = meta_learner.coef_
-        logger.info(f"  Optimized Stacking Weights -> XGBoost: {w[0]:.3f}, RF: {w[1]:.3f}, MA_7: {w[2]:.3f}, Spatial: {w[3]:.3f}")
+        logger.info(f"  Optimized Stacking Weights -> XGBoost: {w[0]:.3f}, RF: {w[1]:.3f}, MA_7: {w[2]:.3f}, MA_14: {w[3]:.3f}, EMA: {w[4]:.3f}, Spatial: {w[5]:.3f}")
         
         # Out-of-Sample Test Evaluation
         test_preds = meta_learner.predict(X_test_meta)

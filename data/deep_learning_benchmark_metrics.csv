@@ -1,5 +1,5 @@
-Architecture_Type,Model,RMSE,MAE,MAPE,R2,Trust_Score,Training_Time_Sec
-Deep Learning,PyTorch LSTM,903.54,574.54,12.32,0.7874,87.7,51.9
-Deep Learning,PyTorch GRU,973.05,620.36,13.33,0.7534,86.7,48.2
-Deep Learning,Temporal CNN (TCN),865.75,570.4,12.46,0.8048,87.5,50.1
-Deep Learning,Time-Series Transformer,955.01,700.6,15.59,0.7625,84.4,80.6
+Architecture_Type,Model,RMSE,MAE,MAPE,R2,Trust_Score,Directional_Accuracy,Precision,Recall,F1_Score,Training_Time_Sec
+Deep Learning,PyTorch LSTM,917.63,556.34,11.86,0.7807,88.1,51.12,50.72,92.65,0.6556,45.0
+Deep Learning,PyTorch GRU,904.58,545.37,11.61,0.7869,88.4,52.26,51.32,95.43,0.6675,41.2
+Deep Learning,Temporal CNN (TCN),821.86,502.25,10.75,0.8241,89.3,52.11,51.21,97.78,0.6721,42.0
+Deep Learning,Time-Series Transformer,936.59,578.76,12.51,0.7716,87.5,50.12,50.18,91.21,0.6474,69.3
