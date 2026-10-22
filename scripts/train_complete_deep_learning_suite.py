@@ -135,9 +135,12 @@ def run_optimized_deep_learning_benchmark(epochs=15):
     ignore = ['state', 'district', 'market', 'commodity', 'variety', 'group', 'date', 'target_price_1d', 'target_price_7d', 'target_price_30d', 'target_direction_7d']
     feat_cols = [c for c in train_df.columns if c not in ignore and np.issubdtype(train_df[c].dtype, np.number)]
     
-    # Residual Target: Delta from current modal price
-    y_train_residual = (train_df['target_price_7d'] - train_df['modal_price']).values
-    y_test_residual = (test_df['target_price_7d'] - test_df['modal_price']).values
+    # Anchored Residual Target: Delta from optimal autoregressive anchor (0.5*MA7 + 0.5*Lag1)
+    anc_train = 0.5 * train_df['price_rolling_mean_7'].values + 0.5 * train_df['price_lag_1'].values
+    anc_test = 0.5 * test_df['price_rolling_mean_7'].values + 0.5 * test_df['price_lag_1'].values
+    
+    y_train_residual = (train_df['target_price_7d'].values - anc_train)
+    y_test_residual = (test_df['target_price_7d'].values - anc_test)
     
     from sklearn.preprocessing import StandardScaler
     scaler_x = StandardScaler()
@@ -191,12 +194,13 @@ def run_optimized_deep_learning_benchmark(epochs=15):
             if ep % 5 == 0 or ep == epochs:
                 logger.info(f"  {name} Epoch {ep:2d}/{epochs} | Residual SmoothL1 Loss: {ep_loss/len(train_loader):.4f}")
                 
-        # Invert predictions: Predicted Price = Current Price + Predicted Residual Drift
+        # Invert predictions: Predicted Price = Optimal Anchor + Predicted Residual Drift
         model.eval()
         with torch.no_grad():
             preds_residual_scaled = model(X_test_t).numpy()
             preds_residual = scaler_y.inverse_transform(preds_residual_scaled).flatten()
-            preds = cur_prices + preds_residual
+            preds_residual = np.clip(preds_residual, -250, 250)
+            preds = anc_test + preds_residual
             
         rmse = np.sqrt(mean_squared_error(y_true, preds))
         mae = mean_absolute_error(y_true, preds)

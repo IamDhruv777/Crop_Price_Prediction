@@ -121,25 +121,45 @@ def train_super_ensemble():
         X_val = val_h[feat_cols].fillna(0)
         X_test = test_h[feat_cols].fillna(0)
         
-        # 1. Base Model 1: Tuned XGBoost
-        logger.info("  [1/4] Training Gradient Boosted Trees (XGBoost)...")
-        xgb = XGBRegressor(n_estimators=200, max_depth=7, learning_rate=0.04, subsample=0.85, random_state=42, n_jobs=-1)
-        xgb.fit(X_train, y_train)
-        pred_val_xgb = xgb.predict(X_val)
-        pred_test_xgb = xgb.predict(X_test)
+        # Anchored residual setup
+        if horizon == 1:
+            anc_val = 0.5 * val_h['price_rolling_mean_7'].values + 0.5 * val_h['price_lag_1'].values
+            anc_test = 0.5 * test_h['price_rolling_mean_7'].values + 0.5 * test_h['price_lag_1'].values
+            anc_train = 0.5 * train_h['price_rolling_mean_7'].values + 0.5 * train_h['price_lag_1'].values
+            clip_val = 150
+        elif horizon == 7:
+            anc_val = 0.5 * val_h['price_rolling_mean_7'].values + 0.5 * val_h['price_lag_1'].values
+            anc_test = 0.5 * test_h['price_rolling_mean_7'].values + 0.5 * test_h['price_lag_1'].values
+            anc_train = 0.5 * train_h['price_rolling_mean_7'].values + 0.5 * train_h['price_lag_1'].values
+            clip_val = 250
+        else:
+            anc_val = 0.4 * val_h['price_rolling_mean_7'].values + 0.1 * val_h['price_lag_1'].values + 0.5 * val_h['modal_price'].values
+            anc_test = 0.4 * test_h['price_rolling_mean_7'].values + 0.1 * test_h['price_lag_1'].values + 0.5 * test_h['modal_price'].values
+            anc_train = 0.4 * train_h['price_rolling_mean_7'].values + 0.1 * train_h['price_lag_1'].values + 0.5 * train_h['modal_price'].values
+            clip_val = 300
+
+        delta_train = y_train - anc_train
+        delta_val = y_val - anc_val
+
+        # 1. Base Model 1: Tuned XGBoost (Anchored Residual)
+        logger.info("  [1/4] Training Gradient Boosted Trees (XGBoost Anchored)...")
+        xgb = XGBRegressor(n_estimators=150, max_depth=6, learning_rate=0.03, subsample=0.85, random_state=42, n_jobs=-1)
+        xgb.fit(X_train, delta_train, eval_set=[(X_val, delta_val)], verbose=False)
+        pred_val_xgb = anc_val + np.clip(xgb.predict(X_val), -clip_val, clip_val)
+        pred_test_xgb = anc_test + np.clip(xgb.predict(X_test), -clip_val, clip_val)
         
-        # 2. Base Model 2: Random Forest
-        logger.info("  [2/4] Training Ensemble Bagging (Random Forest)...")
-        rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+        # 2. Base Model 2: Random Forest (Anchored Residual)
+        logger.info("  [2/4] Training Ensemble Bagging (Random Forest Anchored)...")
+        rf = RandomForestRegressor(n_estimators=80, max_depth=8, random_state=42, n_jobs=-1)
         sample_rf = min(len(train_h), 50000)
-        rf.fit(X_train.iloc[-sample_rf:], y_train[-sample_rf:])
-        pred_val_rf = rf.predict(X_val)
-        pred_test_rf = rf.predict(X_test)
+        rf.fit(X_train.iloc[-sample_rf:], delta_train[-sample_rf:])
+        pred_val_rf = anc_val + np.clip(rf.predict(X_val), -clip_val, clip_val)
+        pred_test_rf = anc_test + np.clip(rf.predict(X_test), -clip_val, clip_val)
         
-        # 3. Base Model 3: Autoregressive Moving Average
+        # 3. Base Model 3: Autoregressive Moving Average Anchor
         logger.info("  [3/4] Extracting Moving Average Baselines & Short-Term Momentum...")
-        pred_val_ma = val_h['price_rolling_mean_7'].fillna(val_h['modal_price']).values
-        pred_test_ma = test_h['price_rolling_mean_7'].fillna(test_h['modal_price']).values
+        pred_val_ma = anc_val
+        pred_test_ma = anc_test
         
         pred_val_ma14 = val_h['price_rolling_mean_14'].fillna(val_h['modal_price']).values
         pred_test_ma14 = test_h['price_rolling_mean_14'].fillna(test_h['modal_price']).values
@@ -147,10 +167,13 @@ def train_super_ensemble():
         pred_val_ema = 0.65 * val_h['modal_price'].values + 0.35 * pred_val_ma
         pred_test_ema = 0.65 * test_h['modal_price'].values + 0.35 * pred_test_ma
         
-        # 4. Base Model 4: Spatial Graph Neighbor Pricing
+        # 4. Base Model 4: Spatial Graph Neighbor Pricing (Anchored Residual)
         logger.info("  [4/4] Extracting Spatial Neighbor Market Contagion...")
-        pred_val_spatial = val_h['spatial_neighbor_price_mean'].fillna(val_h['modal_price']).values
-        pred_test_spatial = test_h['spatial_neighbor_price_mean'].fillna(test_h['modal_price']).values
+        spatial_cols = [c for c in feat_cols if 'spatial' in c or 'price_lag' in c or 'weather' in c or 'rolling' in c]
+        xgb_sp = XGBRegressor(n_estimators=150, max_depth=6, learning_rate=0.03, subsample=0.85, random_state=42, n_jobs=-1)
+        xgb_sp.fit(X_train[spatial_cols], delta_train, eval_set=[(X_val[spatial_cols], delta_val)], verbose=False)
+        pred_val_spatial = anc_val + np.clip(xgb_sp.predict(X_val[spatial_cols]), -clip_val, clip_val)
+        pred_test_spatial = anc_test + np.clip(xgb_sp.predict(X_test[spatial_cols]), -clip_val, clip_val)
         
         # Construct Meta-Feature Matrices (Validation for fitting, Test for inference)
         X_val_meta = np.column_stack([pred_val_xgb, pred_val_rf, pred_val_ma, pred_val_ma14, pred_val_ema, pred_val_spatial])

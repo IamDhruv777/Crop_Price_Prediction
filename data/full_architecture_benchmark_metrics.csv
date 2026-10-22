@@ -1,16 +1,16 @@
 Horizon,RMSE,MAE,MAPE,R2,Trust_Score,Directional_Accuracy,Precision,Recall,F1_Score,Model
 1-Day,815.44,292.7,5.64,0.8277,94.4,59.24,59.24,100.0,0.744,Naive Persistence Baseline
 1-Day,592.87,317.13,6.51,0.9089,93.5,64.83,69.99,71.12,0.7055,Moving Average Baseline
-1-Day,655.07,310.56,6.06,0.8888,93.9,60.25,65.07,71.03,0.6792,Random Forest Regressor
-1-Day,766.79,372.11,6.83,0.8476,93.2,59.26,62.53,77.95,0.6939,Tuned XGBoost Regressor
-1-Day,676.39,342.93,6.57,0.8814,93.4,59.78,67.94,60.81,0.6418,Spatial Graph (GraphSAGE + XGBoost)
+1-Day,498.29,271.93,5.72,0.9357,94.3,61.65,67.55,67.85,0.677,Random Forest Regressor
+1-Day,494.52,272.43,5.74,0.9366,94.3,61.89,66.23,72.78,0.6935,Tuned XGBoost Regressor
+1-Day,504.65,273.95,5.77,0.934,94.2,58.8,67.26,59.35,0.6306,Spatial Graph (GraphSAGE + XGBoost)
 7-Day,869.58,410.12,8.21,0.8031,91.8,50.2,50.2,100.0,0.6685,Naive Persistence Baseline
 7-Day,691.9,417.22,8.72,0.8753,91.3,61.26,59.52,71.37,0.6491,Moving Average Baseline
-7-Day,838.08,580.85,12.15,0.8171,87.8,51.86,51.25,84.42,0.6378,Random Forest Regressor
-7-Day,899.43,587.78,12.01,0.7893,88.0,51.82,51.21,84.98,0.6391,Tuned XGBoost Regressor
-7-Day,797.24,468.73,9.38,0.8345,90.6,57.67,56.21,71.0,0.6274,Spatial Graph (GraphSAGE + XGBoost)
+7-Day,683.91,462.26,10.01,0.8782,90.0,55.07,53.33,84.2,0.653,Random Forest Regressor
+7-Day,675.48,456.14,9.83,0.8812,90.2,54.95,53.26,84.0,0.6519,Tuned XGBoost Regressor
+7-Day,638.49,398.04,8.47,0.8938,91.5,58.81,57.05,72.65,0.6391,Spatial Graph (GraphSAGE + XGBoost)
 30-Day,904.12,549.02,11.47,0.8043,88.5,41.47,41.47,100.0,0.5862,Naive Persistence Baseline
 30-Day,880.12,581.12,12.06,0.8145,87.9,57.68,49.29,71.16,0.5824,Moving Average Baseline
-30-Day,1160.95,894.95,19.32,0.6773,80.7,44.78,42.02,87.3,0.5673,Random Forest Regressor
-30-Day,1220.88,915.4,19.41,0.6431,80.6,45.15,42.28,88.31,0.5718,Tuned XGBoost Regressor
-30-Day,1055.31,720.9,14.8,0.7333,85.2,49.92,44.22,79.4,0.568,Spatial Graph (GraphSAGE + XGBoost)
+30-Day,920.59,674.19,14.47,0.7971,85.5,44.58,41.99,88.12,0.5687,Random Forest Regressor
+30-Day,922.56,676.05,14.5,0.7962,85.5,44.82,42.23,89.92,0.5747,Tuned XGBoost Regressor
+30-Day,866.06,611.26,13.01,0.8204,87.0,49.38,44.16,83.43,0.5775,Spatial Graph (GraphSAGE + XGBoost)

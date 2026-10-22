@@ -123,6 +123,26 @@ def run_full_benchmark():
         y_test_h = test_h[target_col]
         base_price_test = test_h['modal_price']
         
+        # Anchored Residual Formulation for non-linear models
+        if horizon == 1:
+            anc_tr = 0.5 * train_h['price_rolling_mean_7'].values + 0.5 * train_h['price_lag_1'].values
+            anc_va = 0.5 * val_h['price_rolling_mean_7'].values + 0.5 * val_h['price_lag_1'].values
+            anc_te = 0.5 * test_h['price_rolling_mean_7'].values + 0.5 * test_h['price_lag_1'].values
+            clip_val = 150
+        elif horizon == 7:
+            anc_tr = 0.5 * train_h['price_rolling_mean_7'].values + 0.5 * train_h['price_lag_1'].values
+            anc_va = 0.5 * val_h['price_rolling_mean_7'].values + 0.5 * val_h['price_lag_1'].values
+            anc_te = 0.5 * test_h['price_rolling_mean_7'].values + 0.5 * test_h['price_lag_1'].values
+            clip_val = 250
+        else: # 30-Day
+            anc_tr = 0.4 * train_h['price_rolling_mean_7'].values + 0.1 * train_h['price_lag_1'].values + 0.5 * train_h['modal_price'].values
+            anc_va = 0.4 * val_h['price_rolling_mean_7'].values + 0.1 * val_h['price_lag_1'].values + 0.5 * val_h['modal_price'].values
+            anc_te = 0.4 * test_h['price_rolling_mean_7'].values + 0.1 * test_h['price_lag_1'].values + 0.5 * test_h['modal_price'].values
+            clip_val = 300
+            
+        delta_tr = y_train_h.values - anc_tr
+        delta_va = y_val_h.values - anc_va
+
         # 1. BASELINE: Naive Persistence
         logger.info(f"Evaluating Baseline 1: Naive Persistence for {h_name}...")
         naive_preds = test_h['modal_price'].values
@@ -137,39 +157,43 @@ def run_full_benchmark():
         m_ma['Model'] = "Moving Average Baseline"
         benchmark_results.append(m_ma)
         
-        # 3. MACHINE LEARNING: Random Forest Regressor
-        logger.info(f"Training Model 3: Random Forest (Ensemble Bagging) for {h_name}...")
+        # 3. MACHINE LEARNING: Random Forest Regressor (Anchored Residual)
+        logger.info(f"Training Model 3: Random Forest (Anchored Residual) for {h_name}...")
         from sklearn.ensemble import RandomForestRegressor
-        rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+        rf = RandomForestRegressor(n_estimators=100, max_depth=8, random_state=42, n_jobs=-1)
         sample_n = min(len(train_h), 60000)
-        rf.fit(train_h[feature_cols].iloc[-sample_n:], y_train_h.iloc[-sample_n:])
-        rf_preds = rf.predict(test_h[feature_cols])
+        rf.fit(train_h[feature_cols].iloc[-sample_n:], delta_tr[-sample_n:])
+        rf_delta = np.clip(rf.predict(test_h[feature_cols]), -clip_val, clip_val)
+        rf_preds = anc_te + rf_delta
         m_rf = evaluate_metrics(y_test_h, rf_preds, base_price_test, h_name)
         m_rf['Model'] = "Random Forest Regressor"
         benchmark_results.append(m_rf)
         
-        # 4. MACHINE LEARNING: Tuned XGBoost (Primary Gradient Boosted Fallback)
-        logger.info(f"Training Model 4: Tuned XGBoost (Gradient Boosting) for {h_name}...")
+        # 4. MACHINE LEARNING: Tuned XGBoost (Anchored Residual)
+        logger.info(f"Training Model 4: Tuned XGBoost (Anchored Residual) for {h_name}...")
         from xgboost import XGBRegressor
-        xgb = XGBRegressor(n_estimators=250, max_depth=8, learning_rate=0.03, subsample=0.85, random_state=42, n_jobs=-1)
-        xgb.fit(train_h[feature_cols], y_train_h, eval_set=[(val_h[feature_cols], y_val_h)], verbose=False)
-        xgb_preds = xgb.predict(test_h[feature_cols])
+        xgb = XGBRegressor(n_estimators=200, max_depth=6, learning_rate=0.03, subsample=0.85, random_state=42, n_jobs=-1)
+        xgb.fit(train_h[feature_cols], delta_tr, eval_set=[(val_h[feature_cols], delta_va)], verbose=False)
+        xgb_delta = np.clip(xgb.predict(test_h[feature_cols]), -clip_val, clip_val)
+        xgb_preds = anc_te + xgb_delta
         m_xgb = evaluate_metrics(y_test_h, xgb_preds, base_price_test, h_name)
         m_xgb['Model'] = "Tuned XGBoost Regressor"
         benchmark_results.append(m_xgb)
         
-        # 5. SPATIAL GRAPH MODEL: Spatial-Temporal GraphSAGE Weighted Feature Aggregation
-        logger.info(f"Evaluating Model 5: Spatial-Temporal (GraphSAGE Neighbors + XGBoost) for {h_name}...")
-        spatial_features = [c for c in feature_cols if 'spatial' in c or 'price_lag' in c or 'weather' in c]
-        xgb_spatial = XGBRegressor(n_estimators=250, max_depth=8, learning_rate=0.03, random_state=42, n_jobs=-1)
-        xgb_spatial.fit(train_h[spatial_features], y_train_h, eval_set=[(val_h[spatial_features], y_val_h)], verbose=False)
-        spatial_preds = xgb_spatial.predict(test_h[spatial_features])
+        # 5. SPATIAL GRAPH MODEL: Spatial-Temporal (GraphSAGE Neighbors + XGBoost Anchored Residual)
+        logger.info(f"Evaluating Model 5: Spatial-Temporal (GraphSAGE + XGBoost Anchored) for {h_name}...")
+        spatial_features = [c for c in feature_cols if 'spatial' in c or 'price_lag' in c or 'weather' in c or 'rolling' in c]
+        xgb_spatial = XGBRegressor(n_estimators=200, max_depth=6, learning_rate=0.03, subsample=0.85, random_state=42, n_jobs=-1)
+        xgb_spatial.fit(train_h[spatial_features], delta_tr, eval_set=[(val_h[spatial_features], delta_va)], verbose=False)
+        sp_delta = np.clip(xgb_spatial.predict(test_h[spatial_features]), -clip_val, clip_val)
+        spatial_preds = anc_te + sp_delta
         m_spatial = evaluate_metrics(y_test_h, spatial_preds, base_price_test, h_name)
         m_spatial['Model'] = "Spatial Graph (GraphSAGE + XGBoost)"
         benchmark_results.append(m_spatial)
         
         # 6. UNCERTAINTY ESTIMATION: Calibrated 95% Confidence Intervals (Step 7)
-        residuals = np.abs(y_val_h - xgb.predict(val_h[feature_cols]))
+        val_xgb_preds = anc_va + np.clip(xgb.predict(val_h[feature_cols]), -clip_val, clip_val)
+        residuals = np.abs(y_val_h.values - val_xgb_preds)
         q95 = np.quantile(residuals, 0.95)
         
         # Attach predictions for Horizon 7 to the output table

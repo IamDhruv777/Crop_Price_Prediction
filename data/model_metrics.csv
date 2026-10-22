@@ -1,2 +1,2 @@
 Model,RMSE,MAE,MAPE,R2,Trust_Score,Directional_Accuracy,Precision,Recall,F1_Score,Train_Rows,Val_Rows,Test_Rows
-Tuned XGBoost (Unified Multi-Source),899.43,587.78,0.1201,0.7893,88.0,0.5182,0.5121,0.8498,0.6391,186073,39873,39873
+Tuned XGBoost (Unified Multi-Source),675.48,456.14,0.0983,0.8812,90.2,0.5495,0.5326,0.84,0.6519,186073,39873,39873
