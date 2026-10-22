@@ -21,15 +21,19 @@ async def predict_forecast(request: ForecastRequest):
     Serves Tuned XGBoost Regressor for 1-Day and 7-Day horizons, and Naive Persistence Baseline for 30-Day horizon.
     """
     try:
-        res = predictor.predict(
-            state=request.state,
-            district=request.district,
-            market=request.market,
-            crop=request.crop,
-            horizon=request.horizon,
-            confidence_level=request.confidence_level,
-            variety=request.variety
-        )
+        kwargs = {
+            "state": request.state,
+            "district": request.district,
+            "market": request.market,
+            "crop": request.crop,
+            "horizon": request.horizon,
+            "confidence_level": request.confidence_level,
+            "variety": request.variety
+        }
+        if request.as_of_date:
+            kwargs["as_of_date"] = request.as_of_date
+
+        res = predictor.predict(**kwargs)
         if res.get("status") == "error":
             error_code = res.get("error_code")
             if error_code == "insufficient_data":
@@ -39,15 +43,14 @@ async def predict_forecast(request: ForecastRequest):
             else:
                 raise HTTPException(status_code=500, detail=res.get("detail", "Prediction error"))
         
-        today = datetime.now()
         predictions = []
         for p in res["predictions_trajectory"]:
-            step_date = (today + timedelta(days=p["day"])).strftime("%Y-%m-%d")
             predictions.append(PricePrediction(
-                date=step_date,
+                date=p["date"],
                 predicted_price=p["predicted_price"],
                 lower_bound=p["lower_bound"],
-                upper_bound=p["upper_bound"]
+                upper_bound=p["upper_bound"],
+                is_interpolated_bound=p.get("is_interpolated_bound", False)
             ))
             
         return ForecastResponse(
@@ -61,7 +64,10 @@ async def predict_forecast(request: ForecastRequest):
             predictions=predictions,
             confidence_level=res["confidence_level"],
             rmse=res["rmse"],
-            mae=res["mae"]
+            mae=res["mae"],
+            r2=res.get("r2"),
+            as_of_date=res.get("as_of_date", "2017-06-16"),
+            is_historical_backtest=res.get("is_historical_backtest", True)
         )
     except HTTPException:
         raise

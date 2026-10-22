@@ -72,6 +72,7 @@ data/raw/weather/*
 *.joblib
 models/trained/**
 !models/trained/deep_learning_config.json
+!models/trained/deployment_registry.json
 models/scalers/*.pkl
 models/encoders/*.pkl
 

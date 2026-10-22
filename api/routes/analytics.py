@@ -15,6 +15,8 @@ async def get_active_alerts():
     """
     return {
         "active_alerts_count": 2,
+        "is_demo_alert": True,
+        "disclaimer": "Demonstration anomaly alerts based on historical backtest simulation.",
         "alerts": [
             {
                 "type": "PRICE_SURGE_PREDICTION",

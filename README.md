@@ -14,7 +14,7 @@ A production-grade, spatial-temporal agricultural commodity price forecasting pl
 3. **Hierarchical Unified India Map**:
    - Multi-level choropleth map drilldown: **Nationwide $\rightarrow$ State $\rightarrow$ District $\rightarrow$ APMC Mandi**.
 4. **Multi-Horizon Forecasting with 95% Conformal Confidence Intervals**:
-   - Calibrated price forecasts across **1-Day**, **7-Day**, and **30-Day** horizons with mathematically guaranteed coverage intervals ($P_{\text{lower}} \le P_{\text{pred}} \le P_{\text{upper}}$).
+   - Calibrated price forecasts across **1-Day**, **7-Day**, and **30-Day** horizons with empirically calibrated conformal prediction intervals ($P_{\text{lower}} \le P_{\text{pred}} \le P_{\text{upper}}$).
 5. **Phase 2 Benchmark Hub Arbitrage & Supply Shock Signals**:
    - Leading price signals from national benchmark hubs (Raichur, Lalitpur, Mumbai, Merta City, Indore, Burdwan, Kota, Dahod) capturing spatial price contagion and arrival supply-shock dynamics.
 6. **Multi-Commodity Evaluation**:
@@ -85,7 +85,7 @@ Explore interactive Swagger documentation at [http://localhost:8000/docs](http:/
 
 ## Running Automated Tests
 
-Run the complete 10-test test suite covering inference bounds, zero-leakage causal lags, spatial distance, and API endpoints:
+Run the comprehensive 38-test automated test suite covering inference bounds, deployment parity, zero-leakage causal lags, spatial distance, and API endpoints:
 ```bash
 pytest tests/
 ```

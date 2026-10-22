@@ -50,7 +50,9 @@ display_mode = st.sidebar.radio(
 st.session_state["display_mode"] = display_mode
 
 LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
-PREDICTIONS_PATH = Path("data/test_predictions.csv")
+PREDICTIONS_PATH = Path("data/deployed_test_predictions.csv")
+if not PREDICTIONS_PATH.exists():
+    PREDICTIONS_PATH = Path("data/test_predictions.csv")
 
 if not LEADERBOARD_PATH.exists():
     st.error(f"Benchmark file not found at `{LEADERBOARD_PATH}`. Please run pipeline first.")
@@ -85,7 +87,7 @@ if "Farmer" in display_mode or "किसान" in display_mode:
     
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("🎯 " + ("पूर्वानुमान सटीकता" if is_hi else "Forecast Accuracy"), f"{top_model.get('Forecast_Accuracy', 95.65):.1f}%", "100% - MAPE (SAP/Oracle)" if not is_hi else "वाणिज्यिक सटीकता")
-    k2.metric("🛡️ " + ("कॉन्फॉर्मल कवरेज" if is_hi else "Conformal Coverage"), f"{top_model.get('Conformal_Coverage_95', 96.4):.1f}%", "≥95% सुरक्षा गारंटी" if is_hi else "Mathematical 95% Bound")
+    k2.metric("🛡️ " + ("कॉन्फॉर्मल कवरेज" if is_hi else "Conformal Coverage"), f"{top_model.get('Conformal_Coverage_95', 95.6):.1f}%", "≥95% सुरक्षा दायरा" if is_hi else "Calibrated 95% Bound")
     k3.metric("📉 " + ("औसत त्रुटि प्रतिशत" if is_hi else "Error Rate (MAPE)"), f"{top_model['MAPE']:.1f}%", "मात्र ₹4.4 प्रति ₹100" if is_hi else "Low Deviation")
     k4.metric("🧭 " + ("भाव की सही दिशा" if is_hi else "Directional Accuracy"), f"{top_model['Directional_Accuracy']:.1f}%", "बढ़ेगा या गिरेगा" if is_hi else "Up/Down Accuracy")
     k5.metric("🏆 " + ("सर्वश्रेष्ठ R²" if is_hi else "Best R²"), f"{top_model['R2']:.3f}", "Super Ensemble")

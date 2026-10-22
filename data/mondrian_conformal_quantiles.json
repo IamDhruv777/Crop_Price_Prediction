@@ -2,55 +2,98 @@
   "_metadata": {
     "source": "data\\processed\\unified_splits\\val_unified.csv",
     "method": "Split Conformal Prediction on Validation Residuals (alpha=0.05)",
+    "support": "complete_features",
+    "clipped": true,
     "validation_period": "2016-01-01 to 2016-08-31",
     "sample_sizes": {
-      "1-Day": 235028,
-      "7-Day": 263222,
-      "30-Day": 243937
+      "1-Day": 229874,
+      "7-Day": 256370,
+      "30-Day": 238936
+    },
+    "crop_sample_sizes": {
+      "1-Day": {
+        "Wheat": 72716,
+        "Rice": 35555,
+        "Soyabean": 26223,
+        "Arhar (Tur-Red Gram)": 24042,
+        "Maize": 23736,
+        "Black Gram (Urd Beans)": 15512,
+        "Green Gram (Moong)": 14549,
+        "Lentil (Masur)": 13579,
+        "Kabuli Chana (Chickpeas-White)": 2221,
+        "Cowpea (Lobia-Karamani)": 1166,
+        "White Peas": 575
+      },
+      "7-Day": {
+        "Wheat": 79619,
+        "Rice": 38650,
+        "Soyabean": 29543,
+        "Maize": 27986,
+        "Arhar (Tur-Red Gram)": 27104,
+        "Black Gram (Urd Beans)": 17335,
+        "Green Gram (Moong)": 16611,
+        "Lentil (Masur)": 15056,
+        "Kabuli Chana (Chickpeas-White)": 2459,
+        "Cowpea (Lobia-Karamani)": 1380,
+        "White Peas": 627
+      },
+      "30-Day": {
+        "Wheat": 74778,
+        "Rice": 37186,
+        "Soyabean": 27581,
+        "Maize": 25286,
+        "Arhar (Tur-Red Gram)": 24578,
+        "Black Gram (Urd Beans)": 15975,
+        "Green Gram (Moong)": 15207,
+        "Lentil (Masur)": 14225,
+        "Kabuli Chana (Chickpeas-White)": 2315,
+        "Cowpea (Lobia-Karamani)": 1240,
+        "White Peas": 565
+      }
     },
     "deployment_models": {
-      "1-Day": "Tuned XGBoost Regressor (anchor: modal_price)",
-      "7-Day": "Tuned XGBoost Regressor (anchor: 0.6*modal_price + 0.4*price_rolling_mean_7)",
+      "1-Day": "Tuned XGBoost Regressor (anchor: modal_price, clip: [-200, 200])",
+      "7-Day": "Tuned XGBoost Regressor (anchor: 0.6*modal_price + 0.4*price_rolling_mean_7, clip: [-400, 400])",
       "30-Day": "Naive Persistence Baseline (anchor: modal_price)"
     }
   },
   "1-Day": {
-    "Arhar (Tur-Red Gram)": 804.7,
-    "Black Gram (Urd Beans)": 1573.46,
-    "Cowpea (Lobia-Karamani)": 1005.78,
-    "Green Gram (Moong)": 741.25,
-    "Kabuli Chana (Chickpeas-White)": 1512.31,
-    "Lentil (Masur)": 463.63,
-    "Maize": 142.85,
-    "Rice": 198.71,
-    "Soyabean": 246.72,
-    "Wheat": 149.75,
-    "White Peas": 1136.03
+    "Arhar (Tur-Red Gram)": 804.97,
+    "Black Gram (Urd Beans)": 1600.0,
+    "Cowpea (Lobia-Karamani)": 1016.38,
+    "Green Gram (Moong)": 800.0,
+    "Kabuli Chana (Chickpeas-White)": 1680.0,
+    "Lentil (Masur)": 447.28,
+    "Maize": 142.1,
+    "Rice": 198.57,
+    "Soyabean": 245.6,
+    "Wheat": 149.85,
+    "White Peas": 1214.26
   },
   "7-Day": {
-    "Arhar (Tur-Red Gram)": 1181.62,
-    "Black Gram (Urd Beans)": 2056.57,
-    "Cowpea (Lobia-Karamani)": 1313.28,
-    "Green Gram (Moong)": 980.13,
-    "Kabuli Chana (Chickpeas-White)": 1846.89,
-    "Lentil (Masur)": 680.96,
-    "Maize": 165.01,
-    "Rice": 274.06,
-    "Soyabean": 280.25,
-    "Wheat": 155.15,
-    "White Peas": 1368.1
+    "Arhar (Tur-Red Gram)": 1180.46,
+    "Black Gram (Urd Beans)": 2035.34,
+    "Cowpea (Lobia-Karamani)": 1325.12,
+    "Green Gram (Moong)": 983.7,
+    "Kabuli Chana (Chickpeas-White)": 1882.51,
+    "Lentil (Masur)": 680.61,
+    "Maize": 162.81,
+    "Rice": 270.83,
+    "Soyabean": 280.82,
+    "Wheat": 155.1,
+    "White Peas": 1459.68
   },
   "30-Day": {
-    "Arhar (Tur-Red Gram)": 2200.0,
-    "Black Gram (Urd Beans)": 3390.7,
-    "Cowpea (Lobia-Karamani)": 2000.0,
-    "Green Gram (Moong)": 1461.8,
-    "Kabuli Chana (Chickpeas-White)": 2889.67,
+    "Arhar (Tur-Red Gram)": 2250.0,
+    "Black Gram (Urd Beans)": 3320.8,
+    "Cowpea (Lobia-Karamani)": 2017.65,
+    "Green Gram (Moong)": 1470.0,
+    "Kabuli Chana (Chickpeas-White)": 2900.0,
     "Lentil (Masur)": 1100.0,
     "Maize": 250.0,
     "Rice": 400.0,
     "Soyabean": 450.0,
-    "Wheat": 211.0,
-    "White Peas": 2245.75
+    "Wheat": 210.0,
+    "White Peas": 2250.0
   }
 }

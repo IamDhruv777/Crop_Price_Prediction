@@ -1,0 +1,44 @@
+{
+  "1-Day": {
+    "horizon_days": 1,
+    "model_name": "Tuned XGBoost Regressor",
+    "model_file": "models/trained/xgboost_1d.joblib",
+    "model_class": "XGBRegressor",
+    "model_version": "2.1.0-xgboost",
+    "anchor_formula": "modal_price",
+    "clip_delta": 200.0,
+    "is_persistence": false,
+    "feature_support": "complete_features",
+    "calibration_file": "data/mondrian_conformal_quantiles.json",
+    "metrics_artifact": "data/metrics_deployed.json",
+    "description": "Gradient boosted decision trees predicting daily residual price delta anchored to modal_price."
+  },
+  "7-Day": {
+    "horizon_days": 7,
+    "model_name": "Tuned XGBoost Regressor",
+    "model_file": "models/trained/xgboost_7d.joblib",
+    "model_class": "XGBRegressor",
+    "model_version": "2.1.0-xgboost",
+    "anchor_formula": "0.6*modal_price + 0.4*price_rolling_mean_7",
+    "clip_delta": 400.0,
+    "is_persistence": false,
+    "feature_support": "complete_features",
+    "calibration_file": "data/mondrian_conformal_quantiles.json",
+    "metrics_artifact": "data/metrics_deployed.json",
+    "description": "Gradient boosted decision trees predicting weekly residual price delta anchored to weighted moving average."
+  },
+  "30-Day": {
+    "horizon_days": 30,
+    "model_name": "Naive Persistence Baseline",
+    "model_file": "src/models/naive.py",
+    "model_class": "NaiveForecast",
+    "model_version": "2.1.0-persistence",
+    "anchor_formula": "modal_price",
+    "clip_delta": null,
+    "is_persistence": true,
+    "feature_support": "complete_features",
+    "calibration_file": "data/mondrian_conformal_quantiles.json",
+    "metrics_artifact": "data/metrics_deployed.json",
+    "description": "Flat persistence baseline strictly outperforming all trained ML/DL models at 30-day forecast horizons."
+  }
+}

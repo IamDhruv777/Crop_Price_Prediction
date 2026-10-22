@@ -1,0 +1,36 @@
+{
+  "generator": "scripts/generate_audit_reports.py",
+  "description": "Cryptographic integrity manifest of all deployment evaluation artifacts.",
+  "artifacts": {
+    "metrics_deployed.json": {
+      "path": "data/metrics_deployed.json",
+      "size_bytes": 15955,
+      "sha256": "00098456ad8f55f24db21389cd20f3807e342fc0c3f62694bfc1090b983a7956"
+    },
+    "metrics_deployed_by_crop.csv": {
+      "path": "data/metrics_deployed_by_crop.csv",
+      "size_bytes": 2927,
+      "sha256": "f43213065df417a9baa184900602945c5246c8df159a316811579bfa36201c94"
+    },
+    "deployed_test_predictions.csv": {
+      "path": "data/deployed_test_predictions.csv",
+      "size_bytes": 63552161,
+      "sha256": "225f28194e0aebecd7f08ecb62db8b9267fa4421a856ffbb1ad165dfb9f7ebc3"
+    },
+    "mondrian_conformal_quantiles.json": {
+      "path": "data/mondrian_conformal_quantiles.json",
+      "size_bytes": 3031,
+      "sha256": "a42399e4e93f6931b4c2af1874a0e94f6edefd5939e40318488ba2a3c55c46e4"
+    },
+    "master_model_leaderboard.csv": {
+      "path": "data/master_model_leaderboard.csv",
+      "size_bytes": 3070,
+      "sha256": "0c1f3c20c910e9c42b1ce0e67cfb72e574edf070ce5e6dcc98f84679c73d6a9b"
+    },
+    "deployment_registry.json": {
+      "path": "models/trained/deployment_registry.json",
+      "size_bytes": 1802,
+      "sha256": "11b4ef33212888a01a9bfab761a6548ce336438b70c9f327a1b1106547966c3c"
+    }
+  }
+}

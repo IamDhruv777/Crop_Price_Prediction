@@ -55,7 +55,9 @@ display_mode = st.sidebar.radio(
 st.session_state["display_mode"] = display_mode
 
 GEO_PATH = Path("data/raw/geography/market_master.csv")
-PREDS_PATH = Path("data/test_predictions.csv")
+PREDS_PATH = Path("data/deployed_test_predictions.csv")
+if not PREDS_PATH.exists():
+    PREDS_PATH = Path("data/test_predictions.csv")
 EDGES_PATH = Path("data/spatial/spatial_graph_edges.csv")
 
 if not GEO_PATH.exists():

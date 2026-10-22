@@ -1,17 +1,16 @@
 """
-Production Inference Engine for Crop Price Prediction.
-Loads trained models from registry and executes dynamic inference with Conformal 95% Uncertainty Intervals.
-Forensic Integrity:
-  - Exact Training Anchor parity:
-      1-Day: anchor = modal_price
-      7-Day: anchor = 0.6 * modal_price + 0.4 * price_rolling_mean_7
-      30-Day: Naive Persistence Baseline (flat anchor = modal_price)
-  - Zero hardcoding of metrics, model names, or fallback constants.
-  - Zero zero-filling of missing features; returns explicit 'insufficient_data' errors.
-  - Crop-stratified Mondrian Conformal Prediction intervals loaded dynamically.
+Inference engine for crop price prediction.
+Loads production-deployed models from models/trained/deployment_registry.json
+and generates multi-horizon predictions with calibrated 95% conformal uncertainty intervals.
+Evaluated on complete feature vectors without data leakage or zero-filling.
+
+Canonical Deployment Configuration:
+  - 1-Day: Tuned XGBoost Regressor (anchor: modal_price, clip: [-200, 200])
+  - 7-Day: Tuned XGBoost Regressor (anchor: 0.6*modal_price + 0.4*price_rolling_mean_7, clip: [-400, 400])
+  - 30-Day: Naive Persistence Baseline (anchor: modal_price, flat trajectory)
 """
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 import json
 import logging
 import joblib
@@ -20,13 +19,15 @@ import pandas as pd
 
 from src.models.naive import NaiveForecast
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = REPO_ROOT / "data"
 MODELS_DIR = REPO_ROOT / "models" / "trained"
+REGISTRY_PATH = MODELS_DIR / "deployment_registry.json"
 FEATURE_STORE_PATH = DATA_DIR / "processed" / "inference_feature_store.csv"
-BENCHMARK_PATH = DATA_DIR / "full_architecture_benchmark_metrics.csv"
+METRICS_DEPLOYED_PATH = DATA_DIR / "metrics_deployed.json"
 METRICS_PATH = DATA_DIR / "metrics.json"
 MONDRIAN_PATH = DATA_DIR / "mondrian_conformal_quantiles.json"
 
@@ -37,7 +38,8 @@ class CropPricePredictor:
         self.db_session = db_session
         self.models_cache: Dict[str, Tuple[Any, Dict[str, Any]]] = {}
         self._feature_store_cache: Optional[pd.DataFrame] = None
-        self._benchmark_cache: Optional[pd.DataFrame] = None
+        self._registry_cache: Optional[Dict[str, Any]] = None
+        self._metrics_deployed_cache: Optional[Dict[str, Any]] = None
         self._metrics_cache: Optional[Dict[str, Any]] = None
         self._mondrian_cache: Optional[Dict[str, Any]] = None
 
@@ -53,13 +55,25 @@ class CropPricePredictor:
     def feature_store(self) -> pd.DataFrame:
         return self._get_feature_store()
 
-    def _get_benchmark_metrics(self) -> pd.DataFrame:
-        if self._benchmark_cache is None:
-            if BENCHMARK_PATH.exists():
-                self._benchmark_cache = pd.read_csv(BENCHMARK_PATH)
-            else:
-                self._benchmark_cache = pd.DataFrame()
-        return self._benchmark_cache
+    def _get_registry(self) -> Dict[str, Any]:
+        if self._registry_cache is None:
+            if not REGISTRY_PATH.exists():
+                raise FileNotFoundError(f"Deployment registry missing at {REGISTRY_PATH}")
+            with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+                self._registry_cache = json.load(f)
+        return self._registry_cache
+
+    @property
+    def registry(self) -> Dict[str, Any]:
+        return self._get_registry()
+
+    def _get_deployed_metrics(self) -> Dict[str, Any]:
+        if self._metrics_deployed_cache is None:
+            if not METRICS_DEPLOYED_PATH.exists():
+                raise FileNotFoundError(f"Deployed metrics artifact missing at {METRICS_DEPLOYED_PATH}")
+            with open(METRICS_DEPLOYED_PATH, "r", encoding="utf-8") as f:
+                self._metrics_deployed_cache = json.load(f)
+        return self._metrics_deployed_cache
 
     def _get_metrics_json(self) -> Dict[str, Any]:
         if self._metrics_cache is None:
@@ -72,18 +86,16 @@ class CropPricePredictor:
 
     def _get_mondrian_quantiles(self) -> Dict[str, Any]:
         if self._mondrian_cache is None:
-            if MONDRIAN_PATH.exists():
-                with open(MONDRIAN_PATH, "r", encoding="utf-8") as f:
-                    self._mondrian_cache = json.load(f)
-            else:
-                self._mondrian_cache = {}
+            if not MONDRIAN_PATH.exists():
+                raise FileNotFoundError(f"Mondrian quantiles artifact missing at {MONDRIAN_PATH}")
+            with open(MONDRIAN_PATH, "r", encoding="utf-8") as f:
+                self._mondrian_cache = json.load(f)
         return self._mondrian_cache
 
     def get_calibrated_q95(self, crop: str, horizon: int) -> float:
         """
-        Dynamically resolves calibrated 95% conformal quantile.
-        Prioritizes crop-stratified Mondrian quantiles, then pooled validation quantiles.
-        Raises RuntimeError if calibration artifacts are missing (zero hardcoded constants).
+        Dynamically resolves calibrated 95% conformal quantile for the given crop and horizon.
+        Requires exact crop key matching. Fails closed with RuntimeError if missing.
         """
         h_str = f"{horizon}-Day"
         mondrian = self._get_mondrian_quantiles()
@@ -91,113 +103,77 @@ class CropPricePredictor:
             h_dict = mondrian[h_str]
             clean_target = crop.strip().lower()
             for c_name, val in h_dict.items():
-                if c_name.strip().lower() == clean_target or clean_target in c_name.strip().lower():
+                if c_name.strip().lower() == clean_target:
                     return float(val)
 
-        # Fallback to pooled validation conformal quantile from metrics.json
-        metrics = self._get_metrics_json()
-        if "by_horizon" in metrics and h_str in metrics["by_horizon"]:
-            h_metrics = metrics["by_horizon"][h_str]
-            if "Mean_Interval_Width" in h_metrics:
-                return round(float(h_metrics["Mean_Interval_Width"]) / 2.0, 2)
-
         raise RuntimeError(
-            f"Conformal calibration not found for crop '{crop}' and horizon {h_str}. "
+            f"Conformal calibration not found for exact crop '{crop}' and horizon {h_str}. "
             f"Please run scripts/calibrate_mondrian_conformal.py first."
         )
 
     def load_model(self, crop: str, horizon: int) -> Tuple[Optional[Any], Dict[str, Any]]:
         """
-        Loads the production-deployed model for the given horizon.
-        Deployment policy:
-          - 1-Day: Tuned XGBoost Regressor (ML)
-          - 7-Day: Tuned XGBoost Regressor (ML) [Note: TCN is top benchmark, XGB served in API]
-          - 30-Day: Naive Persistence Baseline (strictly deployed per audit Rule 5.7)
+        Loads the production-deployed model and metadata for the given horizon strictly from
+        models/trained/deployment_registry.json and data/metrics_deployed.json.
         """
         cache_key = f"{crop.lower()}_{horizon}d"
         if cache_key in self.models_cache:
             return self.models_cache[cache_key]
 
-        bm_df = self._get_benchmark_metrics()
+        reg = self._get_registry()
         h_str = f"{horizon}-Day"
+        if h_str not in reg:
+            raise ValueError(f"Horizon '{h_str}' not configured in deployment registry.")
 
-        # 30-Day: Naive Persistence Baseline Deployment
-        if horizon == 30:
-            model = NaiveForecast()
-            model_class = type(model).__name__
-            model_name = "Naive Persistence Baseline"
+        h_cfg = reg[h_str]
+        model_name = h_cfg["model_name"]
+        model_class = h_cfg["model_class"]
+        model_version = h_cfg["model_version"]
+        is_persistence = h_cfg.get("is_persistence", False)
+        clip_delta = h_cfg.get("clip_delta")
 
-            rmse = None
-            mae = None
-            r2 = None
-            if not bm_df.empty:
-                match = bm_df[(bm_df["Horizon"] == h_str) & (bm_df["Model"] == model_name)]
-                if not match.empty:
-                    row = match.iloc[0]
-                    rmse = float(row["RMSE"])
-                    mae = float(row["MAE"])
-                    r2 = float(row["R2"])
-
-            q95 = self.get_calibrated_q95(crop, horizon)
-            metadata = {
-                "model_name": model_name,
-                "model_class": model_class,
-                "model_version": "2.1.0-persistence",
-                "horizon": horizon,
-                "rmse": rmse,
-                "mae": mae,
-                "r2": r2,
-                "q95": q95,
-                "is_persistence": True
-            }
-            self.models_cache[cache_key] = (model, metadata)
-            return model, metadata
-
-        # 1-Day & 7-Day: Tuned XGBoost Regressor Deployment
-        xgb_path = MODELS_DIR / f"xgboost_{horizon}d.joblib"
-        if not xgb_path.exists():
-            logger.error(f"Model file not found: {xgb_path}")
-            return None, {
-                "status": "error",
-                "error_code": "model_not_found",
-                "detail": f"Model file not found at {xgb_path}"
-            }
-
-        try:
-            model = joblib.load(xgb_path)
-        except Exception as e:
-            logger.error(f"Error loading model from {xgb_path}: {e}")
-            return None, {
-                "status": "error",
-                "error_code": "model_load_error",
-                "detail": str(e)
-            }
-
-        model_class = type(model).__name__
-        model_name = "Tuned XGBoost Regressor"
-
-        rmse = None
-        mae = None
-        r2 = None
-        if not bm_df.empty:
-            match = bm_df[(bm_df["Horizon"] == h_str) & (bm_df["Model"] == model_name)]
-            if not match.empty:
-                row = match.iloc[0]
-                rmse = float(row["RMSE"])
-                mae = float(row["MAE"])
-                r2 = float(row["R2"])
+        # Load deployed metrics strictly from metrics_deployed.json
+        m_dep = self._get_deployed_metrics()
+        h_metrics = m_dep["by_horizon"].get(h_str, {})
+        rmse = float(h_metrics["RMSE"]) if "RMSE" in h_metrics else None
+        mae = float(h_metrics["MAE"]) if "MAE" in h_metrics else None
+        r2 = float(h_metrics["R2"]) if "R2" in h_metrics else None
 
         q95 = self.get_calibrated_q95(crop, horizon)
+
+        if is_persistence:
+            model = NaiveForecast()
+        else:
+            model_path = REPO_ROOT / h_cfg["model_file"]
+            if not model_path.exists():
+                logger.error(f"Model file not found: {model_path}")
+                return None, {
+                    "status": "error",
+                    "error_code": "model_not_found",
+                    "detail": f"Model file not found at {model_path}"
+                }
+            try:
+                model = joblib.load(model_path)
+            except Exception as e:
+                logger.error(f"Error loading model from {model_path}: {e}")
+                return None, {
+                    "status": "error",
+                    "error_code": "model_load_error",
+                    "detail": str(e)
+                }
+
         metadata = {
             "model_name": model_name,
             "model_class": model_class,
-            "model_version": "2.1.0-xgboost",
+            "model_version": model_version,
             "horizon": horizon,
             "rmse": rmse,
             "mae": mae,
             "r2": r2,
             "q95": q95,
-            "is_persistence": False
+            "is_persistence": is_persistence,
+            "clip_delta": clip_delta,
+            "anchor_formula": h_cfg.get("anchor_formula")
         }
 
         self.models_cache[cache_key] = (model, metadata)
@@ -215,11 +191,12 @@ class CropPricePredictor:
         as_of_date: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Executes verified model inference using complete feature vectors from the feature store.
-        - For 1D: anchor = modal_price
-        - For 7D: anchor = 0.6 * modal_price + 0.4 * price_rolling_mean_7
-        - For 30D: Naive Persistence Baseline (flat anchor = modal_price)
-        Returns explicit 'insufficient_data' if market/crop is unknown or any required feature is null.
+        Executes production inference using complete feature vectors from the feature store.
+        Strictly enforces:
+          1. Exact match on state, district, market, commodity.
+          2. Zero-fill prohibition: is_complete=True required for ALL horizons (including 30D).
+          3. Model residual clipping (1D: [-200, 200], 7D: [-400, 400]).
+          4. Historical calendar dates derived from as_of_date.
         """
         if horizon not in [1, 7, 30]:
             raise ValueError(f"Invalid forecast horizon: {horizon}. Must be 1, 7, or 30.")
@@ -240,33 +217,52 @@ class CropPricePredictor:
                 "detail": "Inference feature store is empty or unavailable."
             }
 
-        # Filter by market and commodity
+        # Exact match strictly required on state, district, market, and commodity
+        DISTRICT_ALIASES = {
+            "solapur": "sholapur",
+            "ahmednagar": "ahmadnagar",
+            "beed": "bid",
+            "buldhana": "buldana",
+            "gondia": "gondiya",
+            "raigad": "raigarh",
+        }
+        clean_dist = district.strip().lower()
+        norm_district = DISTRICT_ALIASES.get(clean_dist, clean_dist)
+
+        st_mask = fs["state"].str.strip().str.lower() == state.strip().lower()
+        dist_mask = fs["district"].str.strip().str.lower() == norm_district
         mkt_mask = fs["market"].str.strip().str.lower() == market.strip().lower()
         crp_mask = fs["commodity"].str.strip().str.lower() == crop.strip().lower()
-        sub = fs[mkt_mask & crp_mask]
-
-        if sub.empty and "district" in fs.columns and district:
-            dist_mask = fs["district"].str.strip().str.lower() == district.strip().lower()
-            sub = fs[dist_mask & crp_mask]
+        sub = fs[st_mask & dist_mask & mkt_mask & crp_mask]
 
         if sub.empty:
             return {
                 "status": "error",
                 "error_code": "insufficient_data",
-                "detail": f"No historical trade features found for market '{market}' and crop '{crop}'."
+                "detail": f"No historical trade features found for exact location: {state} / {district} / {market} / {crop}."
             }
 
-        # Filter by as_of_date if specified
+        # Handle optional as_of_date filter
         if as_of_date:
-            sub = sub[pd.to_datetime(sub["date"]) <= pd.to_datetime(as_of_date)]
-            if sub.empty:
+            sub_date = sub[pd.to_datetime(sub["date"]) <= pd.to_datetime(as_of_date)]
+            if sub_date.empty:
                 return {
                     "status": "error",
                     "error_code": "insufficient_data",
                     "detail": f"No trading records found on or before as_of_date '{as_of_date}' for {market} / {crop}."
                 }
+            latest_record = sub_date.iloc[-1]
+        else:
+            latest_record = sub.iloc[-1]
 
-        latest_record = sub.iloc[-1]
+        # Enforce complete feature contract for ALL horizons (including 30D persistence)
+        if "is_complete" in latest_record and not bool(latest_record["is_complete"]):
+            return {
+                "status": "error",
+                "error_code": "insufficient_data",
+                "detail": f"Market-crop pair {market} / {crop} has incomplete trading history (<30d history) and cannot be forecasted reliably."
+            }
+
         base_price = float(latest_record.get("modal_price", np.nan))
         if pd.isna(base_price) or base_price <= 0:
             return {
@@ -276,6 +272,9 @@ class CropPricePredictor:
             }
 
         q95 = metadata["q95"]
+        record_date = str(latest_record.get("date"))
+        target_as_of_date = as_of_date if as_of_date else record_date
+        base_dt = pd.to_datetime(target_as_of_date)
 
         # -------------------------------------------------------------
         # 30-Day: Naive Persistence Baseline Deployment
@@ -284,13 +283,21 @@ class CropPricePredictor:
             final_price = round(base_price, 2)
             predictions = []
             for step in range(1, horizon + 1):
+                step_date = (base_dt + pd.Timedelta(days=step)).strftime("%Y-%m-%d")
                 step_delta = q95 * np.sqrt(step / horizon)
                 predictions.append({
                     "day": step,
+                    "date": step_date,
                     "predicted_price": final_price,
                     "lower_bound": round(max(0.0, final_price - step_delta), 2),
-                    "upper_bound": round(final_price + step_delta, 2)
+                    "upper_bound": round(final_price + step_delta, 2),
+                    "is_interpolated_bound": (step < horizon)
                 })
+
+            pers_metrics = self._get_metrics_json().get("persistence_by_horizon", {}).get("30-Day", {})
+            p_rmse = float(pers_metrics.get("RMSE", metadata["rmse"]))
+            p_mae = float(pers_metrics.get("MAE", metadata["mae"]))
+            p_r2 = float(pers_metrics.get("R2", metadata["r2"]))
 
             return {
                 "status": "success",
@@ -299,7 +306,7 @@ class CropPricePredictor:
                 "market": market,
                 "crop": crop,
                 "horizon": horizon,
-                "as_of_date": str(latest_record.get("date")),
+                "as_of_date": target_as_of_date,
                 "is_historical_backtest": True,
                 "base_price": round(base_price, 2),
                 "predicted_price": final_price,
@@ -311,15 +318,17 @@ class CropPricePredictor:
                 "uncertainty_delta": round(q95, 2),
                 "model_name": metadata["model_name"],
                 "model_class": metadata["model_class"],
-                "model_version": metadata.get("model_version", "2.1.0-persistence"),
-                "rmse": metadata["rmse"],
-                "mae": metadata["mae"],
-                "r2": metadata["r2"],
+                "model_version": metadata["model_version"],
+                "rmse": p_rmse,
+                "mae": p_mae,
+                "deployed_rmse": metadata["rmse"],
+                "deployed_mae": metadata["mae"],
+                "r2": p_r2,
                 "predictions_trajectory": predictions
             }
 
         # -------------------------------------------------------------
-        # 1-Day & 7-Day: Tuned XGBoost Inference with Exact Anchors
+        # 1-Day & 7-Day: Tuned XGBoost Inference with Anchors & Clipping
         # -------------------------------------------------------------
         if not hasattr(model, "feature_names_in_"):
             return {
@@ -361,18 +370,26 @@ class CropPricePredictor:
                 "detail": f"Inference execution failed: {str(e)}"
             }
 
+        # Apply canonical residual delta clipping
+        clip_bound = metadata.get("clip_delta")
+        if clip_bound is not None:
+            predicted_delta = float(np.clip(predicted_delta, -clip_bound, clip_bound))
+
         final_price = max(10.0, round(anchor + predicted_delta, 2))
 
         # Trajectory calculation from base_price to final_price
         predictions = []
         for step in range(1, horizon + 1):
+            step_date = (base_dt + pd.Timedelta(days=step)).strftime("%Y-%m-%d")
             projected = base_price + (final_price - base_price) * (step / horizon)
             step_delta = q95 * np.sqrt(step / horizon)
             predictions.append({
                 "day": step,
+                "date": step_date,
                 "predicted_price": round(projected, 2),
                 "lower_bound": round(max(0.0, projected - step_delta), 2),
-                "upper_bound": round(projected + step_delta, 2)
+                "upper_bound": round(projected + step_delta, 2),
+                "is_interpolated_bound": (step < horizon)
             })
 
         price_change = round(final_price - base_price, 2)
@@ -392,7 +409,7 @@ class CropPricePredictor:
             "market": market,
             "crop": crop,
             "horizon": horizon,
-            "as_of_date": str(latest_record.get("date")),
+            "as_of_date": target_as_of_date,
             "is_historical_backtest": True,
             "base_price": round(base_price, 2),
             "predicted_price": final_price,
@@ -404,7 +421,7 @@ class CropPricePredictor:
             "uncertainty_delta": round(q95, 2),
             "model_name": metadata["model_name"],
             "model_class": metadata["model_class"],
-            "model_version": metadata.get("model_version", "2.1.0-xgboost"),
+            "model_version": metadata["model_version"],
             "rmse": metadata["rmse"],
             "mae": metadata["mae"],
             "r2": metadata["r2"],

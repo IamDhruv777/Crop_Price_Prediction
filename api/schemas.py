@@ -10,6 +10,7 @@ class ForecastRequest(BaseModel):
     variety: Optional[str] = Field(None, description="Crop variety")
     horizon: int = Field(..., description="Forecast horizon in days (1, 7, 30)")
     confidence_level: float = Field(0.95, description="Confidence level for uncertainty interval")
+    as_of_date: Optional[str] = Field(None, description="Historical anchor date (YYYY-MM-DD)")
 
     @validator('horizon')
     def validate_horizon(cls, v):
@@ -22,6 +23,7 @@ class PricePrediction(BaseModel):
     predicted_price: float
     lower_bound: float
     upper_bound: float
+    is_interpolated_bound: Optional[bool] = False
 
 class ForecastResponse(BaseModel):
     state: str
@@ -35,6 +37,9 @@ class ForecastResponse(BaseModel):
     confidence_level: float
     rmse: float
     mae: float
+    r2: Optional[float] = None
+    as_of_date: Optional[str] = None
+    is_historical_backtest: bool = True
 
 class MarketInfo(BaseModel):
     market_id: str
