@@ -180,15 +180,15 @@ def run_full_benchmark():
         m_xgb['Model'] = "Tuned XGBoost Regressor"
         benchmark_results.append(m_xgb)
         
-        # 5. SPATIAL GRAPH MODEL: Spatial-Temporal (GraphSAGE Neighbors + XGBoost Anchored Residual)
-        logger.info(f"Evaluating Model 5: Spatial-Temporal (GraphSAGE + XGBoost Anchored) for {h_name}...")
+        # 5. SPATIAL MODEL: Spatial k-NN Neighbor Contagion + XGBoost Anchored Residual
+        logger.info(f"Evaluating Model 5: XGBoost + Spatial KNN Features for {h_name}...")
         spatial_features = [c for c in feature_cols if 'spatial' in c or 'price_lag' in c or 'weather' in c or 'rolling' in c]
         xgb_spatial = XGBRegressor(n_estimators=200, max_depth=6, learning_rate=0.03, subsample=0.85, random_state=42, n_jobs=-1)
         xgb_spatial.fit(train_h[spatial_features], delta_tr, eval_set=[(val_h[spatial_features], delta_va)], verbose=False)
         sp_delta = np.clip(xgb_spatial.predict(test_h[spatial_features]), -clip_val, clip_val)
         spatial_preds = anc_te + sp_delta
         m_spatial = evaluate_metrics(y_test_h, spatial_preds, base_price_test, h_name)
-        m_spatial['Model'] = "Spatial Graph (GraphSAGE + XGBoost)"
+        m_spatial['Model'] = "XGBoost + Spatial KNN Features"
         benchmark_results.append(m_spatial)
         
         # 6. UNCERTAINTY ESTIMATION: Calibrated 95% Confidence Intervals (Step 7)

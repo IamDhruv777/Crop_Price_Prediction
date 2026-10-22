@@ -158,12 +158,47 @@ class CropPricePredictor:
         # 2. Load model
         model, metadata = self.load_model(crop, horizon)
         
-        # 3. Multi-day trajectory calculation
+        # 3. Model Inference: Generate actual model prediction using feature vector
+        final_price = None
+        if model is not None and hasattr(model, "predict"):
+            try:
+                # If feature names are known, extract matching features from latest record
+                if hasattr(model, "feature_names_in_"):
+                    feat_cols = model.feature_names_in_
+                    feat_vals = {col: float(latest.get(col, 0.0)) for col in feat_cols}
+                    # Ensure essential baseline features exist
+                    feat_vals['modal_price'] = base_price
+                    if 'price_lag_1' in feat_cols: feat_vals['price_lag_1'] = float(latest.get('price_lag_1', base_price))
+                    if 'price_rolling_mean_7' in feat_cols: feat_vals['price_rolling_mean_7'] = float(latest.get('price_rolling_mean_7', base_price))
+                    X_input = pd.DataFrame([feat_vals])[feat_cols].fillna(0)
+                    raw_pred = model.predict(X_input)
+                else:
+                    # Model accepts standard numpy feature array
+                    X_input = np.array([[base_price]])
+                    raw_pred = model.predict(X_input)
+                
+                # Check if model outputs residual delta or absolute price
+                raw_val = float(raw_pred[0])
+                if abs(raw_val) < (base_price * 0.5):
+                    # Residual delta formulation: Final Price = Base Anchor + Delta
+                    final_price = max(100.0, base_price + raw_val)
+                else:
+                    final_price = max(100.0, raw_val)
+                logger.info(f"Model {metadata['model_name']} inference succeeded: Rs. {final_price:.2f}")
+            except Exception as e:
+                logger.warning(f"Inference error with loaded model ({e}); applying calibrated anchor fallback.")
+                final_price = None
+
+        if final_price is None:
+            # Fallback to calibrated historical trend if features missing
+            drift_rate = 0.0015 if horizon == 1 else (0.0025 if horizon == 7 else 0.0035)
+            final_price = base_price * (1.0 + (drift_rate * horizon))
+
+        # 4. Multi-day trajectory calculation
         predictions = []
-        drift_rate = 0.0015 if horizon == 1 else (0.0025 if horizon == 7 else 0.0035)
-        
         for step in range(1, horizon + 1):
-            projected = base_price * (1.0 + (drift_rate * step))
+            # Linear interpolation of trajectory to final horizon price
+            projected = base_price + (final_price - base_price) * (step / horizon)
             step_delta = q95 * np.sqrt(step / horizon)
             
             predictions.append({
