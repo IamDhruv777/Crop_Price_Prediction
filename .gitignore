@@ -65,11 +65,12 @@ data/raw/weather/*
 *.pkl
 
 # Models (large binary checkpoints)
-models/trained/*.pt
-models/trained/*.pth
-models/trained/*.h5
-models/trained/*.pkl
-models/trained/*.joblib
+*.pt
+*.pth
+*.h5
+*.pkl
+*.joblib
+models/trained/**
 models/scalers/*.pkl
 models/encoders/*.pkl
 

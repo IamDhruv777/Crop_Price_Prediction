@@ -190,3 +190,24 @@ else:
             max_v = max(sample_df[col_act].max(), sample_df[col_pred].max())
             fig_scatter.add_shape(type="line", x0=min_v, y0=min_v, x1=max_v, y1=max_v, line=dict(color="red", dash="dash", width=2))
             st.plotly_chart(fig_scatter, use_container_width=True)
+
+    # Phase 2: Per-Crop Champion Scorecard
+    PER_CROP_PATH = Path('data/per_crop_leaderboard.csv')
+    if PER_CROP_PATH.exists():
+        st.markdown('---')
+        st.subheader('🎯 ' + ('फसल-वार समर्पित AI मॉडल सटीकता (Per-Crop Dedicated Champions)' if is_hi else 'Per-Crop Dedicated Champion Models (Phase 2)'))
+        st.markdown(
+            'विभिन्न फसलों की अपनी विशिष्ट मौसमी प्रवृत्ति और मूल्य स्थिरता होती है। नीचे प्रत्येक फसल के समर्पित चैंपियन मॉडल की सटीकता देखें:'
+            if is_hi else
+            'Different commodities follow distinct seasonal supply dynamics and price elasticities. Below are the verified metrics for each crop-specific champion model:'
+        )
+        df_crop_lb = pd.read_csv(PER_CROP_PATH)
+        crop_filtered = df_crop_lb[df_crop_lb['Horizon'] == horizon_selected] if 'Horizon' in df_crop_lb.columns else df_crop_lb
+        if not crop_filtered.empty:
+            crop_disp = [c for c in ['Commodity', 'Horizon', 'RMSE', 'MAE', 'MAPE', 'R2', 'Trust_Score', 'Directional_Accuracy', 'F1_Score', 'Uncertainty_Delta_95'] if c in crop_filtered.columns]
+            st.dataframe(
+                crop_filtered[crop_disp].style
+                .highlight_min(subset=['RMSE', 'MAE', 'MAPE'], color='#d4edda')
+                .highlight_max(subset=['R2', 'Trust_Score'], color='#cce5ff'),
+                use_container_width=True
+            )

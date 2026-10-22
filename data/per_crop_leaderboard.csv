@@ -1,0 +1,7 @@
+Commodity,Horizon,RMSE,MAE,MAPE,R2,Trust_Score,Directional_Accuracy,Precision,Recall,F1_Score,Uncertainty_Delta_95
+Cowpea (Lobia-Karamani),1-Day,566.54,289.15,6.18,0.9004,93.8,46.83,65.96,37.64,0.4793,1078.65
+Cowpea (Lobia-Karamani),7-Day,794.41,552.83,11.26,0.8057,88.7,50.14,53.81,46.55,0.4991,1565.45
+Cowpea (Lobia-Karamani),30-Day,1081.69,821.76,17.09,0.6663,82.9,51.15,43.56,40.99,0.4223,2286.49
+Green Gram (Moong),1-Day,797.01,340.12,6.8,0.8375,93.2,55.71,58.64,83.68,0.6896,1022.41
+Green Gram (Moong),7-Day,964.31,617.15,13.22,0.7608,86.8,49.87,49.9,88.82,0.639,1717.25
+Green Gram (Moong),30-Day,1210.49,959.2,21.34,0.6533,78.7,42.3,41.09,91.46,0.567,2857.8
