@@ -1,0 +1,7 @@
+Horizon,Target,Model_R2,Persistence_R2,R2_Skill,Model_RMSE,Persistence_RMSE,RMSE_Improvement_Pct,Model_MAE,Persistence_MAE,MAE_Improvement_Pct,Model_RelAcc,Persistence_RelAcc,Model_Tol10,Persistence_Tol10,Model_DirAcc,Persistence_DirAcc,Model_DirF1,Persistence_DirF1,Coverage_95,Mean_Width_Pct
+1-Day,Pooled,0.984,0.9829,0.066,286.16,296.1,3.36,101.11,93.95,-7.62,97.04,97.19,94.66,94.41,59.8,65.45,0.6842,0.7912,96.16,39.02
+1-Day,Macro Average (Equal Crop),0.8358,0.8206,0.0716,369.97,383.98,3.65,168.56,159.24,-5.85,96.11,96.26,92.5,92.13,,,,,92.28,30.19
+7-Day,Pooled,0.9779,0.9735,0.1642,332.22,363.38,8.58,147.98,141.9,-4.28,95.74,95.92,90.78,90.71,49.23,59.05,0.445,0.7425,96.46,62.14
+7-Day,Macro Average (Equal Crop),0.8331,0.7715,0.1998,409.71,458.01,10.55,232.8,232.45,-0.15,94.77,94.83,87.24,87.29,,,,,92.75,48.2
+30-Day,Pooled,0.9485,0.9512,-0.0537,500.86,487.92,-2.65,260.8,229.82,-13.48,92.63,93.52,78.36,80.02,49.81,50.89,0.3786,0.6745,96.64,106.44
+30-Day,Macro Average (Equal Crop),0.7039,0.6469,0.0776,577.2,600.98,3.96,388.42,371.24,-4.63,91.28,91.97,73.02,75.11,,,,,93.33,82.66

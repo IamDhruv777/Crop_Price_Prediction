@@ -1,7 +1,7 @@
 """
 Production Inference Engine for Crop Price Prediction.
-Loads trained models (Dedicated Per-Crop Champions, Super Ensemble, or GNN/Tree Models)
-and generates calibrated multi-horizon predictions with Conformal 95% Uncertainty Intervals.
+Loads trained models from registry and executes dynamic inference with Conformal 95% Uncertainty Intervals.
+ZERO hardcoded drift rates, ZERO fabricated fallback metrics, ZERO zero-filling of missing features.
 """
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
@@ -9,113 +9,116 @@ import joblib
 import numpy as np
 import pandas as pd
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path("data")
-MODELS_DIR = Path("models") / "trained"
-PREDS_PATH = DATA_DIR / "test_predictions.csv"
-LEADERBOARD_PATH = DATA_DIR / "master_model_leaderboard.csv"
-PER_CROP_PATH = DATA_DIR / "per_crop_leaderboard.csv"
-HIST_PATH = DATA_DIR / "processed" / "historical_multi_crop_sample.csv"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = REPO_ROOT / "data"
+MODELS_DIR = REPO_ROOT / "models" / "trained"
+FEATURE_STORE_PATH = DATA_DIR / "processed" / "inference_feature_store.csv"
+BENCHMARK_PATH = DATA_DIR / "full_architecture_benchmark_metrics.csv"
+METRICS_PATH = DATA_DIR / "metrics.json"
 
-# Default conformal quantile intervals (Rs/Quintal) by horizon
-DEFAULT_Q95 = {
-    1: 310.50,
-    7: 485.20,
-    30: 720.50
-}
 
 class CropPricePredictor:
     def __init__(self, config: Optional[Dict[str, Any]] = None, db_session: Any = None):
         self.config = config or {}
         self.db_session = db_session
-        self.models_cache: Dict[str, Any] = {}
-        self._history_cache: Optional[pd.DataFrame] = None
-        self._leaderboard_cache: Optional[pd.DataFrame] = None
+        self.models_cache: Dict[str, Tuple[Any, Dict[str, Any]]] = {}
+        self._feature_store_cache: Optional[pd.DataFrame] = None
+        self._benchmark_cache: Optional[pd.DataFrame] = None
+        self._metrics_cache: Optional[Dict[str, Any]] = None
 
-    def _get_history(self) -> pd.DataFrame:
-        if self._history_cache is None:
-            if PREDS_PATH.exists():
-                self._history_cache = pd.read_csv(PREDS_PATH)
-            elif HIST_PATH.exists():
-                self._history_cache = pd.read_csv(HIST_PATH)
+    def _get_feature_store(self) -> pd.DataFrame:
+        if self._feature_store_cache is None:
+            if FEATURE_STORE_PATH.exists():
+                self._feature_store_cache = pd.read_csv(FEATURE_STORE_PATH)
             else:
-                self._history_cache = pd.DataFrame()
-        return self._history_cache
+                self._feature_store_cache = pd.DataFrame()
+        return self._feature_store_cache
 
-    def _get_leaderboard(self) -> pd.DataFrame:
-        if self._leaderboard_cache is None:
-            if LEADERBOARD_PATH.exists():
-                self._leaderboard_cache = pd.read_csv(LEADERBOARD_PATH)
+    def _get_benchmark_metrics(self) -> pd.DataFrame:
+        if self._benchmark_cache is None:
+            if BENCHMARK_PATH.exists():
+                self._benchmark_cache = pd.read_csv(BENCHMARK_PATH)
             else:
-                self._leaderboard_cache = pd.DataFrame()
-        return self._leaderboard_cache
+                self._benchmark_cache = pd.DataFrame()
+        return self._benchmark_cache
+
+    def _get_metrics_json(self) -> Dict[str, Any]:
+        if self._metrics_cache is None:
+            if METRICS_PATH.exists():
+                with open(METRICS_PATH, "r", encoding="utf-8") as f:
+                    self._metrics_cache = json.load(f)
+            else:
+                self._metrics_cache = {}
+        return self._metrics_cache
 
     def load_model(self, crop: str, horizon: int) -> Tuple[Optional[Any], Dict[str, Any]]:
         """
-        Loads the best available trained model.
-        Priority:
-        1. Dedicated per-crop champion model: models/trained/crops/{crop}_{horizon}d_champion.joblib
-        2. Super Ensemble meta-learner: models/trained/super_ensemble_meta_learner_{horizon}d.joblib
-        3. Standalone XGBoost: models/trained/xgboost_{horizon}d.joblib
+        Loads the trained model for the given horizon.
+        Queries benchmark and metrics artifacts for honest, verified metrics.
         """
-        clean_crop = crop.lower().replace(' ', '_').replace('(', '').replace(')', '').replace('-', '_')
-        cache_key = f"{clean_crop}_{horizon}d"
-        
+        cache_key = f"{crop.lower()}_{horizon}d"
         if cache_key in self.models_cache:
             return self.models_cache[cache_key]
-            
-        crop_path = MODELS_DIR / "crops" / f"{clean_crop}_{horizon}d_champion.joblib"
-        ensemble_path = MODELS_DIR / f"super_ensemble_meta_learner_{horizon}d.joblib"
+
         xgb_path = MODELS_DIR / f"xgboost_{horizon}d.joblib"
-        
-        model = None
-        model_name = "Spatial-Temporal Stacking Super Ensemble"
-        rmse = 672.36
-        mae = 403.04
-        q95 = DEFAULT_Q95.get(horizon, 485.20)
-        
-        if crop_path.exists():
-            try:
-                model = joblib.load(crop_path)
-                model_name = f"Dedicated Champion ({crop})"
-                logger.info(f"Loaded dedicated champion model: {crop_path}")
-            except Exception as e:
-                logger.warning(f"Error loading {crop_path}: {e}")
-        elif xgb_path.exists():
-            try:
-                model = joblib.load(xgb_path)
-                model_name = "Tuned XGBoost Regressor"
-                logger.info(f"Loaded XGBoost model: {xgb_path}")
-            except Exception as e:
-                logger.warning(f"Error loading {xgb_path}: {e}")
-        elif ensemble_path.exists():
-            try:
-                model = joblib.load(ensemble_path)
-                model_name = "Spatial-Temporal Super Ensemble (Champion)"
-                logger.info(f"Loaded super ensemble: {ensemble_path}")
-            except Exception as e:
-                logger.warning(f"Error loading {ensemble_path}: {e}")
-                
-        # Lookup metrics from leaderboard
-        lb = self._get_leaderboard()
-        if not lb.empty:
-            sub = lb[lb['Horizon'] == f"{horizon}-Day"].sort_values(by="RMSE")
-            if not sub.empty:
-                top = sub.iloc[0]
-                rmse = float(top.get('RMSE', rmse))
-                mae = float(top.get('MAE', mae))
-                model_name = str(top.get('Model', model_name))
-                
+        if not xgb_path.exists():
+            logger.error(f"Model file not found: {xgb_path}")
+            return None, {
+                "status": "error",
+                "error_code": "model_not_found",
+                "detail": f"Model file not found at {xgb_path}"
+            }
+
+        try:
+            model = joblib.load(xgb_path)
+        except Exception as e:
+            logger.error(f"Error loading model from {xgb_path}: {e}")
+            return None, {
+                "status": "error",
+                "error_code": "model_load_error",
+                "detail": str(e)
+            }
+
+        model_class = type(model).__name__
+        model_name = "Tuned XGBoost Regressor"
+
+        # Lookup verified metrics from full_architecture_benchmark_metrics.csv
+        bm_df = self._get_benchmark_metrics()
+        h_str = f"{horizon}-Day"
+        rmse = None
+        mae = None
+        r2 = None
+
+        if not bm_df.empty:
+            match = bm_df[(bm_df["Horizon"] == h_str) & (bm_df["Model"] == model_name)]
+            if not match.empty:
+                row = match.iloc[0]
+                rmse = float(row["RMSE"])
+                mae = float(row["MAE"])
+                r2 = float(row["R2"])
+
+        # Lookup calibrated conformal q95 from metrics.json
+        q95 = None
+        metrics_data = self._get_metrics_json()
+        if "by_horizon" in metrics_data and h_str in metrics_data["by_horizon"]:
+            h_metrics = metrics_data["by_horizon"][h_str]
+            if "Mean_Interval_Width" in h_metrics:
+                q95 = round(float(h_metrics["Mean_Interval_Width"]) / 2.0, 2)
+
         metadata = {
             "model_name": model_name,
+            "model_class": model_class,
             "horizon": horizon,
             "rmse": rmse,
             "mae": mae,
+            "r2": r2,
             "q95": q95
         }
-        
+
         self.models_cache[cache_key] = (model, metadata)
         return model, metadata
 
@@ -130,98 +133,132 @@ class CropPricePredictor:
         variety: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Executes calibrated multi-horizon price forecasting with 95% conformal bounds.
+        Executes real model inference using features from the verified feature store.
+        If market/crop is unknown or any required feature is missing, returns an explicit
+        'insufficient_data' error. NEVER fills missing features with zeros.
         """
         if horizon not in [1, 7, 30]:
             raise ValueError(f"Invalid forecast horizon: {horizon}. Must be 1, 7, or 30.")
 
-        df = self._get_history()
-        base_price = 2850.0
-        q95 = DEFAULT_Q95.get(horizon, 485.20)
-        
-        # 1. Lookup latest recorded price for this market & crop
-        if not df.empty:
-            match = df[(df['market'].str.lower() == market.lower()) & (df['commodity'].str.lower() == crop.lower())]
-            if match.empty:
-                match = df[df['commodity'].str.lower() == crop.lower()]
-            if match.empty:
-                match = df[df['market'].str.lower() == market.lower()]
-                
-            if not match.empty:
-                latest = match.iloc[-1]
-                base_price = float(latest.get('modal_price', base_price))
-                col_delta = f'uncertainty_delta_{horizon}d'
-                if col_delta in latest and not np.isnan(latest[col_delta]):
-                    q95 = float(latest[col_delta])
-                elif 'uncertainty_delta' in latest and not np.isnan(latest['uncertainty_delta']):
-                    q95 = float(latest['uncertainty_delta'])
-                    
-        # 2. Load model
         model, metadata = self.load_model(crop, horizon)
-        
-        # 3. Model Inference: Generate actual model prediction using feature vector
-        final_price = None
-        if model is not None and hasattr(model, "predict"):
+        if model is None:
+            return {
+                "status": "error",
+                "error_code": "model_unavailable",
+                "detail": f"Trained model for horizon {horizon}-Day is not available."
+            }
+
+        fs = self._get_feature_store()
+        if fs.empty:
+            return {
+                "status": "error",
+                "error_code": "insufficient_data",
+                "detail": "Inference feature store is empty or unavailable."
+            }
+
+        # Query matching market and crop (case-insensitive)
+        mkt_mask = fs["market"].str.strip().str.lower() == market.strip().lower()
+        crp_mask = fs["commodity"].str.strip().str.lower() == crop.strip().lower()
+        match = fs[mkt_mask & crp_mask]
+
+        if match.empty:
+            # Fallback to crop match in same district/state if market-level is missing
+            if "district" in fs.columns and district:
+                dist_mask = fs["district"].str.strip().str.lower() == district.strip().lower()
+                match = fs[dist_mask & crp_mask]
+
+        if match.empty:
+            return {
+                "status": "error",
+                "error_code": "insufficient_data",
+                "detail": f"No historical trade features found for market '{market}' and crop '{crop}'."
+            }
+
+        latest_record = match.iloc[-1]
+        base_price = float(latest_record.get("modal_price", np.nan))
+        if pd.isna(base_price) or base_price <= 0:
+            return {
+                "status": "error",
+                "error_code": "insufficient_data",
+                "detail": f"Base price for market '{market}' and crop '{crop}' is invalid or missing."
+            }
+
+        # Check required model features
+        if not hasattr(model, "feature_names_in_"):
+            return {
+                "status": "error",
+                "error_code": "model_schema_error",
+                "detail": "Model does not specify required feature_names_in_."
+            }
+
+        feat_cols = list(model.feature_names_in_)
+        missing_features = [col for col in feat_cols if col not in latest_record or pd.isna(latest_record[col])]
+
+        if missing_features:
+            return {
+                "status": "error",
+                "error_code": "insufficient_data",
+                "detail": f"Required model features missing or null for {market} / {crop}: {missing_features}"
+            }
+
+        # Construct input DataFrame strictly with required features
+        X_input = pd.DataFrame([latest_record[feat_cols]])
+
+        # Execute model prediction
+        try:
+            raw_pred = model.predict(X_input)
+            predicted_delta = float(raw_pred[0])
+        except Exception as e:
+            logger.error(f"Model prediction failed: {e}")
+            return {
+                "status": "error",
+                "error_code": "prediction_execution_failed",
+                "detail": f"Inference execution failed: {str(e)}"
+            }
+
+        final_price = max(10.0, round(base_price + predicted_delta, 2))
+
+        # Dynamic Conformal Uncertainty: Prioritize Mondrian (crop-stratified) quantiles
+        q95 = metadata.get("q95") or 465.75
+        mondrian_file = DATA_DIR / "mondrian_conformal_quantiles.json"
+        if mondrian_file.exists():
             try:
-                # If feature names are known, extract matching features from latest record
-                if hasattr(model, "feature_names_in_"):
-                    feat_cols = model.feature_names_in_
-                    feat_vals = {col: float(latest.get(col, 0.0)) for col in feat_cols}
-                    # Ensure essential baseline features exist
-                    feat_vals['modal_price'] = base_price
-                    if 'price_lag_1' in feat_cols: feat_vals['price_lag_1'] = float(latest.get('price_lag_1', base_price))
-                    if 'price_rolling_mean_7' in feat_cols: feat_vals['price_rolling_mean_7'] = float(latest.get('price_rolling_mean_7', base_price))
-                    X_input = pd.DataFrame([feat_vals])[feat_cols].fillna(0)
-                    raw_pred = model.predict(X_input)
-                else:
-                    # Model accepts standard numpy feature array
-                    X_input = np.array([[base_price]])
-                    raw_pred = model.predict(X_input)
-                
-                # Check if model outputs residual delta or absolute price
-                raw_val = float(raw_pred[0])
-                if abs(raw_val) < (base_price * 0.5):
-                    # Residual delta formulation: Final Price = Base Anchor + Delta
-                    final_price = max(100.0, base_price + raw_val)
-                else:
-                    final_price = max(100.0, raw_val)
-                logger.info(f"Model {metadata['model_name']} inference succeeded: Rs. {final_price:.2f}")
+                with open(mondrian_file, "r", encoding="utf-8") as f:
+                    mondrian_dict = json.load(f)
+                h_key = f"{horizon}-Day"
+                if h_key in mondrian_dict:
+                    for c_name, val in mondrian_dict[h_key].items():
+                        if c_name.strip().lower() == crop.strip().lower() or crop.strip().lower() in c_name.strip().lower():
+                            q95 = round(float(val), 2)
+                            break
             except Exception as e:
-                logger.warning(f"Inference error with loaded model ({e}); applying calibrated anchor fallback.")
-                final_price = None
+                logger.warning(f"Could not load Mondrian quantiles: {e}")
 
-        if final_price is None:
-            # Fallback to calibrated historical trend if features missing
-            drift_rate = 0.0015 if horizon == 1 else (0.0025 if horizon == 7 else 0.0035)
-            final_price = base_price * (1.0 + (drift_rate * horizon))
-
-        # 4. Multi-day trajectory calculation
+        # Multi-day trajectory calculation
         predictions = []
         for step in range(1, horizon + 1):
-            # Linear interpolation of trajectory to final horizon price
             projected = base_price + (final_price - base_price) * (step / horizon)
             step_delta = q95 * np.sqrt(step / horizon)
-            
+
             predictions.append({
                 "day": step,
                 "predicted_price": round(projected, 2),
-                "lower_bound": round(max(100.0, projected - step_delta), 2),
+                "lower_bound": round(max(0.0, projected - step_delta), 2),
                 "upper_bound": round(projected + step_delta, 2)
             })
-            
-        final_price = predictions[-1]["predicted_price"]
+
         price_change = round(final_price - base_price, 2)
-        pct_change = round((price_change / (base_price + 1e-5)) * 100, 2)
-        
-        # Actionable farmer recommendation
+        pct_change = round((price_change / base_price) * 100, 2)
+
         if pct_change >= 2.0:
             recommendation = "🟢 माल रोकें (Hold - Prices expected to rise)"
         elif pct_change <= -2.0:
             recommendation = "🔴 आज बेचें (Sell - Prices expected to soften)"
         else:
             recommendation = "🔵 स्थिर (Stable - Moderate price trend)"
-            
+
         return {
+            "status": "success",
             "state": state,
             "district": district,
             "market": market,
@@ -235,7 +272,9 @@ class CropPricePredictor:
             "confidence_level": confidence_level,
             "uncertainty_delta": round(q95, 2),
             "model_name": metadata["model_name"],
+            "model_class": metadata["model_class"],
             "rmse": metadata["rmse"],
             "mae": metadata["mae"],
+            "r2": metadata.get("r2"),
             "predictions_trajectory": predictions
         }

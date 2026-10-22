@@ -1,0 +1,41 @@
+{
+  "1-Day": {
+    "Arhar (Tur-Red Gram)": 804.6988840103149,
+    "Black Gram (Urd Beans)": 1573.4570938110348,
+    "Cowpea (Lobia-Karamani)": 1005.7802194356918,
+    "Green Gram (Moong)": 741.2525981903074,
+    "Kabuli Chana (Chickpeas-White)": 1512.3080638885483,
+    "Lentil (Masur)": 463.63061599731435,
+    "Maize": 142.85194226503364,
+    "Rice": 198.70521447658533,
+    "Soyabean": 246.71514577865565,
+    "Wheat": 149.75447189807892,
+    "White Peas": 1136.0311013579371
+  },
+  "7-Day": {
+    "Arhar (Tur-Red Gram)": 1178.3397819519041,
+    "Black Gram (Urd Beans)": 2199.3186559677124,
+    "Cowpea (Lobia-Karamani)": 1322.3943176269518,
+    "Green Gram (Moong)": 1045.4015558242781,
+    "Kabuli Chana (Chickpeas-White)": 2046.4649051189426,
+    "Lentil (Masur)": 716.5426829338071,
+    "Maize": 183.64820067882528,
+    "Rice": 300.41270621120844,
+    "Soyabean": 313.68667793273926,
+    "Wheat": 179.11748895645144,
+    "White Peas": 1417.9006637573234
+  },
+  "30-Day": {
+    "Arhar (Tur-Red Gram)": 2460.4503440856934,
+    "Black Gram (Urd Beans)": 3366.0194503784005,
+    "Cowpea (Lobia-Karamani)": 2236.188162231446,
+    "Green Gram (Moong)": 1611.8600585937497,
+    "Kabuli Chana (Chickpeas-White)": 2824.2645568847656,
+    "Lentil (Masur)": 1251.5122756958008,
+    "Maize": 254.5582316398619,
+    "Rice": 394.90868616104126,
+    "Soyabean": 488.69488525390625,
+    "Wheat": 219.6246016502382,
+    "White Peas": 2208.0944221496566
+  }
+}

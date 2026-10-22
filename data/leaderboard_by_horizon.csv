@@ -1,0 +1,25 @@
+Horizon,RMSE,MAE,MAPE,R2,Relative_Accuracy,Tolerance_10,Coverage_95,Directional_Accuracy,F1_Score,Model
+1-Day,284.4,103.65,3.11,0.9842,96.89,94.88,,64.65,0.7452,Ridge Autoregressive
+1-Day,285.03,95.67,2.85,0.9842,97.15,94.65,,60.22,0.6909,XGBoost + Spatial KNN Features
+1-Day,285.36,96.18,2.86,0.9841,97.14,94.62,,60.17,0.6933,Tuned XGBoost Regressor
+1-Day,285.49,96.3,2.85,0.9841,97.15,94.65,,60.46,0.6936,LightGBM Regressor
+1-Day,286.16,101.11,2.96,0.984,97.04,94.66,96.16,59.8,0.6842,Super Ensemble (Stacking)
+1-Day,292.02,96.87,2.88,0.9834,97.12,94.34,,61.0,0.7369,Random Forest Regressor
+1-Day,296.1,93.95,2.81,0.9829,97.19,94.41,,65.45,0.7912,Naive Persistence Baseline
+1-Day,321.34,130.03,3.75,0.9799,96.25,92.01,,64.39,0.7151,Moving Average (7-day)
+30-Day,487.92,229.82,6.48,0.9512,93.52,80.02,,50.89,0.6745,Naive Persistence Baseline
+30-Day,500.86,260.8,7.37,0.9485,92.63,78.36,96.64,49.81,0.3786,Super Ensemble (Stacking)
+30-Day,522.66,298.51,8.8,0.944,91.2,69.98,,54.22,0.6744,Ridge Autoregressive
+30-Day,536.52,280.08,7.5,0.941,92.5,76.47,,57.95,0.6324,LightGBM Regressor
+30-Day,542.58,283.34,7.58,0.9396,92.42,76.05,,57.23,0.6275,Tuned XGBoost Regressor
+30-Day,545.97,283.81,7.64,0.9389,92.36,75.94,,55.98,0.6156,Random Forest Regressor
+30-Day,560.37,294.47,7.84,0.9356,92.16,74.58,,55.37,0.6253,XGBoost + Spatial KNN Features
+30-Day,646.45,323.52,8.86,0.9143,91.14,71.71,,56.53,0.6125,Moving Average (30-day)
+7-Day,332.22,147.98,4.26,0.9779,95.74,90.78,96.46,49.23,0.445,Super Ensemble (Stacking)
+7-Day,334.6,146.07,4.16,0.9776,95.84,90.48,,61.67,0.6968,Random Forest Regressor
+7-Day,336.08,148.92,4.2,0.9774,95.8,90.38,,60.01,0.6759,Tuned XGBoost Regressor
+7-Day,338.09,150.0,4.22,0.9771,95.78,90.37,,61.47,0.6949,XGBoost + Spatial KNN Features
+7-Day,339.26,151.38,4.25,0.9769,95.75,90.19,,59.6,0.6695,LightGBM Regressor
+7-Day,339.44,165.07,4.93,0.9769,95.07,89.14,,61.81,0.7354,Ridge Autoregressive
+7-Day,363.38,141.9,4.08,0.9735,95.92,90.71,,59.05,0.7425,Naive Persistence Baseline
+7-Day,380.13,166.96,4.76,0.9711,95.24,88.2,,62.35,0.6824,Moving Average (7-day)

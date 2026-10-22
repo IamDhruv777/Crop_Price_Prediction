@@ -9,12 +9,15 @@ Forensic Audit Compliant:
      - PyTorch GRU with residual pathway
      - Temporal Convolutional Network (TCN) with causal dilated 1D convolutions
      - Time-Series Transformer with sinusoidal positional encodings and self-attention
-  4. Trained on genuine AGMARKNET mandi data across all 11 crops.
-  5. Outputs runtime metrics to data/deep_learning_benchmark_metrics.csv.
+  4. Deterministic: Fixed random seeds (torch.manual_seed(42), np.random.seed(42)).
+  5. Validation Set Early Stopping: Saves best model checkpoint based on validation loss.
+  6. Configuration & Seeds saved to models/trained/deep_learning_config.json.
+  7. Outputs runtime metrics to data/deep_learning_benchmark_metrics.csv.
 """
 import sys
 import time
 import math
+import json
 from pathlib import Path
 import logging
 import torch
@@ -38,6 +41,16 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 TRAIN_FILE = SPLITS_DIR / "train_unified.csv"
 VAL_FILE = SPLITS_DIR / "val_unified.csv"
 TEST_FILE = SPLITS_DIR / "test_unified.csv"
+CONFIG_FILE = MODELS_DIR / "deep_learning_config.json"
+
+RANDOM_SEED = 42
+
+
+def set_seed(seed=RANDOM_SEED):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 # 1. Real PyTorch LSTM
@@ -173,30 +186,32 @@ def build_temporal_sequences(df: pd.DataFrame) -> np.ndarray:
     p_30 = df['price_lag_30'].fillna(p_14)
 
     # Step-by-step price levels across the 7 timesteps
-    p_seq = np.column_stack([p_30.values, p_14.values, p_7.values, p_3.values, p_2.values, p_1.values, p_t.values])  # [N, 7]
+    p_seq = np.column_stack([p_30.values, p_14.values, p_7.values, p_3.values, p_2.values, p_1.values, p_t.values])
 
     # Rolling mean across timesteps
     m30 = df['price_rolling_mean_30'].fillna(p_t).values
     m14 = df['price_rolling_mean_14'].fillna(p_t).values
     m7 = df['price_rolling_mean_7'].fillna(p_t).values
     m3 = df['price_rolling_mean_3'].fillna(p_t).values
-    m_seq = np.column_stack([m30, m14, m7, m3, (p_2.values + p_1.values)/2, p_1.values, p_t.values])  # [N, 7]
+    m_seq = np.column_stack([m30, m14, m7, m3, (p_2.values + p_1.values)/2, p_1.values, p_t.values])
 
     # Arrivals across timesteps
     a_1 = df['arrival_lag_1'].fillna(0).values
     a_7 = df['arrival_lag_7'].fillna(0).values
-    a_seq = np.column_stack([a_7, a_7, a_7, a_1, a_1, a_1, a_1])  # [N, 7]
+    a_seq = np.column_stack([a_7, a_7, a_7, a_1, a_1, a_1, a_1])
 
     # Spatial neighbor signal across timesteps
     sp_1 = df['spatial_neighbor_price_mean'].fillna(p_t).values
-    sp_seq = np.column_stack([sp_1, sp_1, sp_1, sp_1, sp_1, sp_1, sp_1])  # [N, 7]
+    sp_seq = np.column_stack([sp_1, sp_1, sp_1, sp_1, sp_1, sp_1, sp_1])
 
     # Stack along feature axis -> [N, 7, 4]
     X_seq = np.stack([p_seq, m_seq, a_seq, sp_seq], axis=-1)
     return X_seq.astype(np.float32)
 
 
-def run_optimized_deep_learning_benchmark(epochs=8):
+def run_optimized_deep_learning_benchmark(epochs=8, patience=3):
+    set_seed(RANDOM_SEED)
+
     logger.info("==========================================================================")
     logger.info("=== STEP 5: OPTIMIZED RESIDUAL DEEP LEARNING (TEMPORAL SEQUENCES) ===")
     logger.info("==========================================================================")
@@ -207,10 +222,10 @@ def run_optimized_deep_learning_benchmark(epochs=8):
 
     # Sample for fast, robust deep learning training
     n_train_sub = min(len(train_df), 100000)
-    train_sub = train_df.sample(n=n_train_sub, random_state=42)
+    train_sub = train_df.sample(n=n_train_sub, random_state=RANDOM_SEED)
 
     n_val_sub = min(len(val_df), 20000)
-    val_sub = val_df.sample(n=n_val_sub, random_state=42)
+    val_sub = val_df.sample(n=n_val_sub, random_state=RANDOM_SEED)
 
     logger.info(f"Building temporal 3D sequence tensors [N, seq_len=7, n_features=4]...")
     X_train_raw = build_temporal_sequences(train_sub)
@@ -219,9 +234,11 @@ def run_optimized_deep_learning_benchmark(epochs=8):
 
     # Autoregressive 7-Day Anchor
     anc_tr = 0.6 * train_sub['modal_price'].values + 0.4 * train_sub['price_rolling_mean_7'].values
+    anc_va = 0.6 * val_sub['modal_price'].values + 0.4 * val_sub['price_rolling_mean_7'].values
     anc_te = 0.6 * test_df['modal_price'].values + 0.4 * test_df['price_rolling_mean_7'].values
 
     y_train_residual = train_sub['target_price_7d'].values - anc_tr
+    y_val_residual = val_sub['target_price_7d'].values - anc_va
     y_test_residual = test_df['target_price_7d'].values - anc_te
 
     # Normalize sequences using 3D standardization
@@ -230,17 +247,24 @@ def run_optimized_deep_learning_benchmark(epochs=8):
     X_train_2d = scaler_x.fit_transform(X_train_raw.reshape(-1, F))
     X_train_scaled = X_train_2d.reshape(N_tr, T, F)
 
+    X_val_2d = scaler_x.transform(X_val_raw.reshape(-1, F))
+    X_val_scaled = X_val_2d.reshape(len(val_sub), T, F)
+
     X_test_2d = scaler_x.transform(X_test_raw.reshape(-1, F))
     X_test_scaled = X_test_2d.reshape(len(test_df), T, F)
 
     scaler_y = StandardScaler()
     y_train_scaled = scaler_y.fit_transform(y_train_residual.reshape(-1, 1))
+    y_val_scaled = scaler_y.transform(y_val_residual.reshape(-1, 1))
 
     X_train_t = torch.FloatTensor(X_train_scaled)
     y_train_t = torch.FloatTensor(y_train_scaled)
+    X_val_t = torch.FloatTensor(X_val_scaled)
+    y_val_t = torch.FloatTensor(y_val_scaled)
     X_test_t = torch.FloatTensor(X_test_scaled)
 
     train_loader = DataLoader(TensorDataset(X_train_t, y_train_t), batch_size=256, shuffle=True)
+    val_loader = DataLoader(TensorDataset(X_val_t, y_val_t), batch_size=512, shuffle=False)
 
     input_dim = F
     models = {
@@ -250,20 +274,42 @@ def run_optimized_deep_learning_benchmark(epochs=8):
         "Time-Series Transformer": ResidualTransformer(input_dim)
     }
 
+    # Save configuration & reproducibility seeds
+    config = {
+        "seed": RANDOM_SEED,
+        "sequence_length": T,
+        "num_features": F,
+        "batch_size": 256,
+        "learning_rate": 0.005,
+        "weight_decay": 1e-4,
+        "epochs": epochs,
+        "early_stopping_patience": patience,
+        "loss_fn": "SmoothL1Loss(beta=0.5)",
+        "models": list(models.keys())
+    }
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+    logger.info(f"Saved deep learning configuration to {CONFIG_FILE}")
+
     results = []
     y_true = test_df['target_price_7d'].values
     cur_prices = test_df['modal_price'].values
 
     for name, model in models.items():
-        logger.info(f"\n--- Training Real Temporal {name} (Sequence Length={T}) across {epochs} Epochs ---")
+        set_seed(RANDOM_SEED)
+        logger.info(f"\n--- Training Real Temporal {name} (Sequence Length={T}) across max {epochs} Epochs ---")
         start_t = time.time()
         optimizer = torch.optim.AdamW(model.parameters(), lr=0.005, weight_decay=1e-4)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
         loss_fn = nn.SmoothL1Loss(beta=0.5)
 
+        best_val_loss = float("inf")
+        best_state = None
+        no_improve_epochs = 0
+
         for ep in range(1, epochs + 1):
             model.train()
-            ep_loss = 0.0
+            train_loss = 0.0
             for bx, by in train_loader:
                 optimizer.zero_grad()
                 pred = model(bx)
@@ -271,12 +317,39 @@ def run_optimized_deep_learning_benchmark(epochs=8):
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
-                ep_loss += loss.item()
+                train_loss += loss.item()
             scheduler.step()
-            if ep % 2 == 0 or ep == epochs:
-                logger.info(f"  {name} Epoch {ep:2d}/{epochs} | Loss: {ep_loss/len(train_loader):.4f}")
+            avg_train_loss = train_loss / len(train_loader)
 
-        # Invert predictions
+            # Validation loss evaluation for early stopping
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                for vbx, vby in val_loader:
+                    vpred = model(vbx)
+                    vloss = loss_fn(vpred, vby)
+                    val_loss += vloss.item()
+            avg_val_loss = val_loss / len(val_loader)
+
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+                no_improve_epochs = 0
+            else:
+                no_improve_epochs += 1
+
+            if ep % 2 == 0 or ep == epochs:
+                logger.info(f"  {name} Epoch {ep:2d}/{epochs} | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f} (Best: {best_val_loss:.4f})")
+
+            if no_improve_epochs >= patience:
+                logger.info(f"  Early stopping triggered for {name} at epoch {ep} (patience={patience})")
+                break
+
+        # Load best model checkpoint from validation
+        if best_state is not None:
+            model.load_state_dict(best_state)
+
+        # Invert predictions on test set
         model.eval()
         with torch.no_grad():
             preds_residual_scaled = model(X_test_t).numpy()
@@ -325,4 +398,4 @@ def run_optimized_deep_learning_benchmark(epochs=8):
 
 
 if __name__ == "__main__":
-    run_optimized_deep_learning_benchmark(epochs=8)
+    run_optimized_deep_learning_benchmark(epochs=8, patience=3)

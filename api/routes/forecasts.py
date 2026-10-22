@@ -30,6 +30,14 @@ async def predict_forecast(request: ForecastRequest):
             confidence_level=request.confidence_level,
             variety=request.variety
         )
+        if res.get("status") == "error":
+            error_code = res.get("error_code")
+            if error_code == "insufficient_data":
+                raise HTTPException(status_code=422, detail=res.get("detail", "Insufficient data for prediction"))
+            elif error_code == "model_unavailable":
+                raise HTTPException(status_code=503, detail=res.get("detail", "Model unavailable"))
+            else:
+                raise HTTPException(status_code=500, detail=res.get("detail", "Prediction error"))
         
         today = datetime.now()
         predictions = []
@@ -55,6 +63,8 @@ async def predict_forecast(request: ForecastRequest):
             rmse=res["rmse"],
             mae=res["mae"]
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
 
