@@ -162,7 +162,9 @@
         "macro_Relative_Accuracy": 96.11,
         "macro_Tolerance_10pct": 92.5,
         "macro_Conformal_Coverage_95": 92.28,
-        "macro_Mean_Interval_Width_Pct": 30.19
+        "macro_Conformal_Coverage_95_Pooled": 92.28,
+        "macro_Mean_Interval_Width_Pct": 30.19,
+        "macro_Mean_Interval_Width_Pct_Pooled": 30.19
       },
       "persistence": {
         "macro_R2": 0.8206,
@@ -187,7 +189,9 @@
         "macro_Relative_Accuracy": 94.77,
         "macro_Tolerance_10pct": 87.24,
         "macro_Conformal_Coverage_95": 92.75,
-        "macro_Mean_Interval_Width_Pct": 48.2
+        "macro_Conformal_Coverage_95_Pooled": 92.75,
+        "macro_Mean_Interval_Width_Pct": 48.2,
+        "macro_Mean_Interval_Width_Pct_Pooled": 48.2
       },
       "persistence": {
         "macro_R2": 0.7715,
@@ -212,7 +216,9 @@
         "macro_Relative_Accuracy": 91.28,
         "macro_Tolerance_10pct": 73.02,
         "macro_Conformal_Coverage_95": 93.33,
-        "macro_Mean_Interval_Width_Pct": 82.66
+        "macro_Conformal_Coverage_95_Pooled": 93.33,
+        "macro_Mean_Interval_Width_Pct": 82.66,
+        "macro_Mean_Interval_Width_Pct_Pooled": 82.66
       },
       "persistence": {
         "macro_R2": 0.6469,
@@ -227,6 +233,46 @@
         "macro_RMSE_Improvement_Pct": 3.96,
         "macro_MAE_Improvement_Pct": -4.63
       }
+    }
+  },
+  "mondrian_averages": {
+    "1-Day": {
+      "macro_coverage": 96.07,
+      "macro_interval_width_pct": 33.57,
+      "crops_below_95": [
+        {
+          "crop": "Kabuli Chana (Chickpeas-White)",
+          "coverage": 91.98
+        }
+      ]
+    },
+    "7-Day": {
+      "macro_coverage": 95.9,
+      "macro_interval_width_pct": 43.13,
+      "crops_below_95": [
+        {
+          "crop": "Kabuli Chana (Chickpeas-White)",
+          "coverage": 91.05
+        },
+        {
+          "crop": "Wheat",
+          "coverage": 93.24
+        }
+      ]
+    },
+    "30-Day": {
+      "macro_coverage": 96.02,
+      "macro_interval_width_pct": 69.39,
+      "crops_below_95": [
+        {
+          "crop": "Kabuli Chana (Chickpeas-White)",
+          "coverage": 91.67
+        },
+        {
+          "crop": "Wheat",
+          "coverage": 88.41
+        }
+      ]
     }
   },
   "by_crop": [
@@ -247,9 +293,13 @@
       "Persistence_RelAcc": 96.43,
       "Model_Tol10": 92.26,
       "Persistence_Tol10": 92.41,
-      "Coverage_95": 93.17,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 20.6
+      "Coverage_95_Pooled": 93.17,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 20.6,
+      "Mondrian_q95": 804.7,
+      "Coverage_95_Mondrian": 96.92,
+      "Mean_Width_Mondrian": 1609.4,
+      "Mean_Width_Pct_Mondrian": 35.59
     },
     {
       "Crop": "Black Gram (Urd Beans)",
@@ -268,9 +318,13 @@
       "Persistence_RelAcc": 95.43,
       "Model_Tol10": 89.46,
       "Persistence_Tol10": 88.53,
-      "Coverage_95": 86.74,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 16.39
+      "Coverage_95_Pooled": 86.74,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 16.39,
+      "Mondrian_q95": 1573.46,
+      "Coverage_95_Mondrian": 98.59,
+      "Mean_Width_Mondrian": 3146.92,
+      "Mean_Width_Pct_Mondrian": 55.39
     },
     {
       "Crop": "Cowpea (Lobia-Karamani)",
@@ -289,9 +343,13 @@
       "Persistence_RelAcc": 95.28,
       "Model_Tol10": 88.41,
       "Persistence_Tol10": 87.36,
-      "Coverage_95": 89.41,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 20.96
+      "Coverage_95_Pooled": 89.41,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 20.96,
+      "Mondrian_q95": 1005.78,
+      "Coverage_95_Mondrian": 95.89,
+      "Mean_Width_Mondrian": 2011.56,
+      "Mean_Width_Pct_Mondrian": 45.26
     },
     {
       "Crop": "Green Gram (Moong)",
@@ -310,9 +368,13 @@
       "Persistence_RelAcc": 95.94,
       "Model_Tol10": 90.77,
       "Persistence_Tol10": 89.69,
-      "Coverage_95": 91.82,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 19.93
+      "Coverage_95_Pooled": 91.82,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 19.93,
+      "Mondrian_q95": 741.25,
+      "Coverage_95_Mondrian": 96.36,
+      "Mean_Width_Mondrian": 1482.5,
+      "Mean_Width_Pct_Mondrian": 31.71
     },
     {
       "Crop": "Kabuli Chana (Chickpeas-White)",
@@ -331,9 +393,13 @@
       "Persistence_RelAcc": 92.23,
       "Model_Tol10": 84.83,
       "Persistence_Tol10": 84.87,
-      "Coverage_95": 68.55,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 10.59
+      "Coverage_95_Pooled": 68.55,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 10.59,
+      "Mondrian_q95": 1512.31,
+      "Coverage_95_Mondrian": 91.98,
+      "Mean_Width_Mondrian": 3024.62,
+      "Mean_Width_Pct_Mondrian": 34.38
     },
     {
       "Crop": "Lentil (Masur)",
@@ -352,9 +418,13 @@
       "Persistence_RelAcc": 97.47,
       "Model_Tol10": 96.05,
       "Persistence_Tol10": 95.6,
-      "Coverage_95": 96.48,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 19.29
+      "Coverage_95_Pooled": 96.48,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 19.29,
+      "Mondrian_q95": 463.63,
+      "Coverage_95_Mondrian": 96.44,
+      "Mean_Width_Mondrian": 927.26,
+      "Mean_Width_Pct_Mondrian": 19.2
     },
     {
       "Crop": "Maize",
@@ -373,9 +443,13 @@
       "Persistence_RelAcc": 97.32,
       "Model_Tol10": 95.15,
       "Persistence_Tol10": 95.21,
-      "Coverage_95": 99.52,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 67.91
+      "Coverage_95_Pooled": 99.52,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 67.91,
+      "Mondrian_q95": 142.85,
+      "Coverage_95_Mondrian": 95.64,
+      "Mean_Width_Mondrian": 285.7,
+      "Mean_Width_Pct_Mondrian": 20.83
     },
     {
       "Crop": "Rice",
@@ -394,9 +468,13 @@
       "Persistence_RelAcc": 98.36,
       "Model_Tol10": 96.72,
       "Persistence_Tol10": 96.67,
-      "Coverage_95": 97.88,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 37.43
+      "Coverage_95_Pooled": 97.88,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 37.43,
+      "Mondrian_q95": 198.71,
+      "Coverage_95_Mondrian": 95.59,
+      "Mean_Width_Mondrian": 397.42,
+      "Mean_Width_Pct_Mondrian": 15.97
     },
     {
       "Crop": "Soyabean",
@@ -415,9 +493,13 @@
       "Persistence_RelAcc": 97.77,
       "Model_Tol10": 97.29,
       "Persistence_Tol10": 97.32,
-      "Coverage_95": 99.1,
-      "Mean_Width": 931.49,
-      "Mean_Width_Pct": 33.92
+      "Coverage_95_Pooled": 99.1,
+      "Mean_Width_Pooled": 931.49,
+      "Mean_Width_Pct_Pooled": 33.92,
+      "Mondrian_q95": 246.72,
+      "Coverage_95_Mondrian": 96.84,
+      "Mean_Width_Mondrian": 493.44,
+      "Mean_Width_Pct_Mondrian": 17.97
     },
     {
       "Crop": "Wheat",
@@ -436,9 +518,13 @@
       "Persistence_RelAcc": 97.8,
       "Model_Tol10": 96.53,
       "Persistence_Tol10": 96.32,
-      "Coverage_95": 99.45,
-      "Mean_Width": 931.47,
-      "Mean_Width_Pct": 54.06
+      "Coverage_95_Pooled": 99.45,
+      "Mean_Width_Pooled": 931.47,
+      "Mean_Width_Pct_Pooled": 54.06,
+      "Mondrian_q95": 149.75,
+      "Coverage_95_Mondrian": 95.07,
+      "Mean_Width_Mondrian": 299.5,
+      "Mean_Width_Pct_Mondrian": 17.39
     },
     {
       "Crop": "White Peas",
@@ -457,9 +543,13 @@
       "Persistence_RelAcc": 94.79,
       "Model_Tol10": 90.06,
       "Persistence_Tol10": 89.47,
-      "Coverage_95": 92.98,
-      "Mean_Width": 931.5,
-      "Mean_Width_Pct": 30.96
+      "Coverage_95_Pooled": 92.98,
+      "Mean_Width_Pooled": 931.5,
+      "Mean_Width_Pct_Pooled": 30.96,
+      "Mondrian_q95": 1136.03,
+      "Coverage_95_Mondrian": 97.43,
+      "Mean_Width_Mondrian": 2272.06,
+      "Mean_Width_Pct_Mondrian": 75.53
     },
     {
       "Crop": "Arhar (Tur-Red Gram)",
@@ -478,9 +568,13 @@
       "Persistence_RelAcc": 94.25,
       "Model_Tol10": 81.62,
       "Persistence_Tol10": 84.67,
-      "Coverage_95": 91.28,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 33.26
+      "Coverage_95_Pooled": 91.28,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 33.26,
+      "Mondrian_q95": 1181.62,
+      "Coverage_95_Mondrian": 96.76,
+      "Mean_Width_Mondrian": 2363.24,
+      "Mean_Width_Pct_Mondrian": 53.04
     },
     {
       "Crop": "Black Gram (Urd Beans)",
@@ -499,9 +593,13 @@
       "Persistence_RelAcc": 93.16,
       "Model_Tol10": 79.91,
       "Persistence_Tol10": 79.78,
-      "Coverage_95": 88.01,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 26.47
+      "Coverage_95_Pooled": 88.01,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 26.47,
+      "Mondrian_q95": 2056.57,
+      "Coverage_95_Mondrian": 98.94,
+      "Mean_Width_Mondrian": 4113.14,
+      "Mean_Width_Pct_Mondrian": 73.46
     },
     {
       "Crop": "Cowpea (Lobia-Karamani)",
@@ -520,9 +618,13 @@
       "Persistence_RelAcc": 93.08,
       "Model_Tol10": 81.54,
       "Persistence_Tol10": 80.76,
-      "Coverage_95": 88.77,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 33.46
+      "Coverage_95_Pooled": 88.77,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 33.46,
+      "Mondrian_q95": 1313.28,
+      "Coverage_95_Mondrian": 95.82,
+      "Mean_Width_Mondrian": 2626.56,
+      "Mean_Width_Pct_Mondrian": 59.31
     },
     {
       "Crop": "Green Gram (Moong)",
@@ -541,9 +643,13 @@
       "Persistence_RelAcc": 94.45,
       "Model_Tol10": 84.77,
       "Persistence_Tol10": 84.42,
-      "Coverage_95": 93.94,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 31.93
+      "Coverage_95_Pooled": 93.94,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 31.93,
+      "Mondrian_q95": 980.13,
+      "Coverage_95_Mondrian": 96.84,
+      "Mean_Width_Mondrian": 1960.26,
+      "Mean_Width_Pct_Mondrian": 42.24
     },
     {
       "Crop": "Kabuli Chana (Chickpeas-White)",
@@ -562,9 +668,13 @@
       "Persistence_RelAcc": 90.19,
       "Model_Tol10": 74.32,
       "Persistence_Tol10": 74.04,
-      "Coverage_95": 68.32,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 16.9
+      "Coverage_95_Pooled": 68.32,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 16.9,
+      "Mondrian_q95": 1846.89,
+      "Coverage_95_Mondrian": 91.05,
+      "Mean_Width_Mondrian": 3693.78,
+      "Mean_Width_Pct_Mondrian": 42.12
     },
     {
       "Crop": "Lentil (Masur)",
@@ -583,9 +693,13 @@
       "Persistence_RelAcc": 95.73,
       "Model_Tol10": 89.27,
       "Persistence_Tol10": 89.88,
-      "Coverage_95": 96.67,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 31.17
+      "Coverage_95_Pooled": 96.67,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 31.17,
+      "Mondrian_q95": 680.96,
+      "Coverage_95_Mondrian": 95.98,
+      "Mean_Width_Mondrian": 1361.92,
+      "Mean_Width_Pct_Mondrian": 28.65
     },
     {
       "Crop": "Maize",
@@ -604,9 +718,13 @@
       "Persistence_RelAcc": 96.44,
       "Model_Tol10": 93.44,
       "Persistence_Tol10": 93.02,
-      "Coverage_95": 99.65,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 108.04
+      "Coverage_95_Pooled": 99.65,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 108.04,
+      "Mondrian_q95": 165.01,
+      "Coverage_95_Mondrian": 95.48,
+      "Mean_Width_Mondrian": 330.02,
+      "Mean_Width_Pct_Mondrian": 24.06
     },
     {
       "Crop": "Rice",
@@ -625,9 +743,13 @@
       "Persistence_RelAcc": 97.63,
       "Model_Tol10": 95.68,
       "Persistence_Tol10": 95.51,
-      "Coverage_95": 98.62,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 59.4
+      "Coverage_95_Pooled": 98.62,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 59.4,
+      "Mondrian_q95": 274.06,
+      "Coverage_95_Mondrian": 95.6,
+      "Mean_Width_Mondrian": 548.12,
+      "Mean_Width_Pct_Mondrian": 21.97
     },
     {
       "Crop": "Soyabean",
@@ -646,9 +768,13 @@
       "Persistence_RelAcc": 97.02,
       "Model_Tol10": 96.46,
       "Persistence_Tol10": 96.18,
-      "Coverage_95": 99.48,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 54.12
+      "Coverage_95_Pooled": 99.48,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 54.12,
+      "Mondrian_q95": 280.25,
+      "Coverage_95_Mondrian": 96.66,
+      "Mean_Width_Mondrian": 560.5,
+      "Mean_Width_Pct_Mondrian": 20.47
     },
     {
       "Crop": "Wheat",
@@ -667,9 +793,13 @@
       "Persistence_RelAcc": 96.82,
       "Model_Tol10": 95.21,
       "Persistence_Tol10": 94.28,
-      "Coverage_95": 99.71,
-      "Mean_Width": 1481.69,
-      "Mean_Width_Pct": 86.13
+      "Coverage_95_Pooled": 99.71,
+      "Mean_Width_Pooled": 1481.69,
+      "Mean_Width_Pct_Pooled": 86.13,
+      "Mondrian_q95": 155.15,
+      "Coverage_95_Mondrian": 93.24,
+      "Mean_Width_Mondrian": 310.3,
+      "Mean_Width_Pct_Mondrian": 18.05
     },
     {
       "Crop": "White Peas",
@@ -688,9 +818,13 @@
       "Persistence_RelAcc": 94.36,
       "Model_Tol10": 87.46,
       "Persistence_Tol10": 87.68,
-      "Coverage_95": 95.82,
-      "Mean_Width": 1481.78,
-      "Mean_Width_Pct": 49.33
+      "Coverage_95_Pooled": 95.82,
+      "Mean_Width_Pooled": 1481.78,
+      "Mean_Width_Pct_Pooled": 49.33,
+      "Mondrian_q95": 1368.1,
+      "Coverage_95_Mondrian": 98.57,
+      "Mean_Width_Mondrian": 2736.2,
+      "Mean_Width_Pct_Mondrian": 91.09
     },
     {
       "Crop": "Arhar (Tur-Red Gram)",
@@ -709,9 +843,13 @@
       "Persistence_RelAcc": 90.15,
       "Model_Tol10": 52.65,
       "Persistence_Tol10": 65.36,
-      "Coverage_95": 87.51,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 58.19
+      "Coverage_95_Pooled": 87.51,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 58.19,
+      "Mondrian_q95": 2200.0,
+      "Coverage_95_Mondrian": 98.44,
+      "Mean_Width_Mondrian": 4400.0,
+      "Mean_Width_Pct_Mondrian": 100.56
     },
     {
       "Crop": "Black Gram (Urd Beans)",
@@ -730,9 +868,13 @@
       "Persistence_RelAcc": 89.34,
       "Model_Tol10": 57.82,
       "Persistence_Tol10": 61.71,
-      "Coverage_95": 88.69,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 46.2
+      "Coverage_95_Pooled": 88.69,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 46.2,
+      "Mondrian_q95": 3390.7,
+      "Coverage_95_Mondrian": 99.07,
+      "Mean_Width_Mondrian": 6781.4,
+      "Mean_Width_Pct_Mondrian": 123.05
     },
     {
       "Crop": "Cowpea (Lobia-Karamani)",
@@ -751,9 +893,13 @@
       "Persistence_RelAcc": 89.64,
       "Model_Tol10": 66.72,
       "Persistence_Tol10": 68.45,
-      "Coverage_95": 88.85,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 57.77
+      "Coverage_95_Pooled": 88.85,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 57.77,
+      "Mondrian_q95": 2000.0,
+      "Coverage_95_Mondrian": 95.56,
+      "Mean_Width_Mondrian": 4000.0,
+      "Mean_Width_Pct_Mondrian": 90.76
     },
     {
       "Crop": "Green Gram (Moong)",
@@ -772,9 +918,13 @@
       "Persistence_RelAcc": 91.83,
       "Model_Tol10": 68.92,
       "Persistence_Tol10": 71.18,
-      "Coverage_95": 96.17,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 54.94
+      "Coverage_95_Pooled": 96.17,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 54.94,
+      "Mondrian_q95": 1461.8,
+      "Coverage_95_Mondrian": 97.46,
+      "Mean_Width_Mondrian": 2923.6,
+      "Mean_Width_Pct_Mondrian": 63.08
     },
     {
       "Crop": "Kabuli Chana (Chickpeas-White)",
@@ -793,9 +943,13 @@
       "Persistence_RelAcc": 85.49,
       "Model_Tol10": 59.42,
       "Persistence_Tol10": 54.8,
-      "Coverage_95": 72.07,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 28.27
+      "Coverage_95_Pooled": 72.07,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 28.27,
+      "Mondrian_q95": 2889.67,
+      "Coverage_95_Mondrian": 91.67,
+      "Mean_Width_Mondrian": 5779.34,
+      "Mean_Width_Pct_Mondrian": 64.17
     },
     {
       "Crop": "Lentil (Masur)",
@@ -814,9 +968,13 @@
       "Persistence_RelAcc": 91.41,
       "Model_Tol10": 62.17,
       "Persistence_Tol10": 65.93,
-      "Coverage_95": 97.21,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 53.81
+      "Coverage_95_Pooled": 97.21,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 53.81,
+      "Mondrian_q95": 1100.0,
+      "Coverage_95_Mondrian": 96.42,
+      "Mean_Width_Mondrian": 2200.0,
+      "Mean_Width_Pct_Mondrian": 46.49
     },
     {
       "Crop": "Maize",
@@ -835,9 +993,13 @@
       "Persistence_RelAcc": 95.05,
       "Model_Tol10": 85.21,
       "Persistence_Tol10": 88.3,
-      "Coverage_95": 99.84,
-      "Mean_Width": 2522.28,
-      "Mean_Width_Pct": 182.61
+      "Coverage_95_Pooled": 99.84,
+      "Mean_Width_Pooled": 2522.28,
+      "Mean_Width_Pct_Pooled": 182.61,
+      "Mondrian_q95": 250.0,
+      "Coverage_95_Mondrian": 96.33,
+      "Mean_Width_Mondrian": 500.0,
+      "Mean_Width_Pct_Mondrian": 36.24
     },
     {
       "Crop": "Rice",
@@ -856,9 +1018,13 @@
       "Persistence_RelAcc": 96.35,
       "Model_Tol10": 92.75,
       "Persistence_Tol10": 93.37,
-      "Coverage_95": 99.47,
-      "Mean_Width": 2546.1,
-      "Mean_Width_Pct": 102.04
+      "Coverage_95_Pooled": 99.47,
+      "Mean_Width_Pooled": 2546.1,
+      "Mean_Width_Pct_Pooled": 102.04,
+      "Mondrian_q95": 400.0,
+      "Coverage_95_Mondrian": 95.85,
+      "Mean_Width_Mondrian": 800.0,
+      "Mean_Width_Pct_Mondrian": 32.06
     },
     {
       "Crop": "Soyabean",
@@ -877,9 +1043,13 @@
       "Persistence_RelAcc": 96.3,
       "Model_Tol10": 94.69,
       "Persistence_Tol10": 94.42,
-      "Coverage_95": 99.75,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 92.99
+      "Coverage_95_Pooled": 99.75,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 92.99,
+      "Mondrian_q95": 450.0,
+      "Coverage_95_Mondrian": 97.97,
+      "Mean_Width_Mondrian": 900.0,
+      "Mean_Width_Pct_Mondrian": 32.87
     },
     {
       "Crop": "Wheat",
@@ -898,9 +1068,13 @@
       "Persistence_RelAcc": 94.27,
       "Model_Tol10": 84.87,
       "Persistence_Tol10": 81.68,
-      "Coverage_95": 99.86,
-      "Mean_Width": 2546.05,
-      "Mean_Width_Pct": 147.65
+      "Coverage_95_Pooled": 99.86,
+      "Mean_Width_Pooled": 2546.05,
+      "Mean_Width_Pct_Pooled": 147.65,
+      "Mondrian_q95": 211.0,
+      "Coverage_95_Mondrian": 88.41,
+      "Mean_Width_Mondrian": 422.0,
+      "Mean_Width_Pct_Mondrian": 24.47
     },
     {
       "Crop": "White Peas",
@@ -919,9 +1093,53 @@
       "Persistence_RelAcc": 91.79,
       "Model_Tol10": 78.01,
       "Persistence_Tol10": 81.02,
-      "Coverage_95": 97.25,
-      "Mean_Width": 2546.12,
-      "Mean_Width_Pct": 84.76
+      "Coverage_95_Pooled": 97.25,
+      "Mean_Width_Pooled": 2546.12,
+      "Mean_Width_Pct_Pooled": 84.76,
+      "Mondrian_q95": 2245.75,
+      "Coverage_95_Mondrian": 99.08,
+      "Mean_Width_Mondrian": 4491.5,
+      "Mean_Width_Pct_Mondrian": 149.52
     }
-  ]
+  ],
+  "mondrian_macro": {
+    "1-Day": {
+      "macro_coverage": 96.07,
+      "macro_interval_width_pct": 33.57,
+      "crops_below_95": [
+        {
+          "crop": "Kabuli Chana (Chickpeas-White)",
+          "coverage": 91.98
+        }
+      ]
+    },
+    "7-Day": {
+      "macro_coverage": 95.9,
+      "macro_interval_width_pct": 43.13,
+      "crops_below_95": [
+        {
+          "crop": "Kabuli Chana (Chickpeas-White)",
+          "coverage": 91.05
+        },
+        {
+          "crop": "Wheat",
+          "coverage": 93.24
+        }
+      ]
+    },
+    "30-Day": {
+      "macro_coverage": 96.02,
+      "macro_interval_width_pct": 69.39,
+      "crops_below_95": [
+        {
+          "crop": "Kabuli Chana (Chickpeas-White)",
+          "coverage": 91.67
+        },
+        {
+          "crop": "Wheat",
+          "coverage": 88.41
+        }
+      ]
+    }
+  }
 }

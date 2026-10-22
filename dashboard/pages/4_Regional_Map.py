@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 import sys
+import json
 
 # Dual compatibility for Plotly 6/7 (scatter_map) and Plotly 5 (scatter_mapbox)
 scatter_map_fn = getattr(px, 'scatter_map', getattr(px, 'scatter_mapbox', None))
@@ -113,7 +114,7 @@ if PREDS_PATH.exists():
     merged_map['modal_price'] = merged_map['modal_price'].fillna(geo_df['latitude'] * 50 + 1400)
     merged_map['selected_forecast'] = merged_map[pred_col].fillna(merged_map['modal_price'] * (1.01 if "1" in h_suffix else (1.05 if "30" in h_suffix else 1.02)))
     merged_map['price_drift_pct'] = ((merged_map['selected_forecast'] - merged_map['modal_price']) / merged_map['modal_price']) * 100
-    merged_map['conformal_delta'] = merged_map[delta_col].fillna(563.81 if "7" in h_suffix else (348.20 if "1" in h_suffix else 890.15))
+    merged_map['conformal_delta'] = merged_map[delta_col].fillna(get_mondrian_default_delta(h_label, clean_crop if 'All Commodities' not in selected_commodity else None))
 else:
     h_label = "7-Day"
     h_hindi = "7 दिन"
@@ -121,7 +122,7 @@ else:
     merged_map['modal_price'] = 2200.0
     merged_map['selected_forecast'] = 2250.0
     merged_map['price_drift_pct'] = 2.27
-    merged_map['conformal_delta'] = 563.81
+    merged_map['conformal_delta'] = get_mondrian_default_delta('7-Day')
 
 st.sidebar.header("🗺️ " + ("नक्शा नियंत्रण" if is_hi else "Map Controls"))
 

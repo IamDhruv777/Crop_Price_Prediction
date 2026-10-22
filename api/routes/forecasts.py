@@ -18,7 +18,7 @@ predictor = CropPricePredictor()
 async def predict_forecast(request: ForecastRequest):
     """
     Main multi-horizon forecast endpoint with calibrated 95% conformal prediction bounds.
-    Uses dedicated per-crop champions and spatial-temporal stacking ensemble.
+    Serves Tuned XGBoost Regressor for 1-Day and 7-Day horizons, and Naive Persistence Baseline for 30-Day horizon.
     """
     try:
         res = predictor.predict(
@@ -57,7 +57,7 @@ async def predict_forecast(request: ForecastRequest):
             crop=res["crop"],
             horizon=res["horizon"],
             model=res["model_name"],
-            model_version="2.1.0-production",
+            model_version=res.get("model_version", "2.1.0-production"),
             predictions=predictions,
             confidence_level=res["confidence_level"],
             rmse=res["rmse"],
@@ -90,4 +90,4 @@ async def get_model_accuracy(model_name: str):
         match = df[df['Model'].str.lower().str.contains(model_name.lower())]
         if not match.empty:
             return {"model_name": model_name, "metrics": match.to_dict(orient='records')}
-    return {"model_name": model_name, "accuracy": 0.88}
+    raise HTTPException(status_code=404, detail=f"Metrics for model '{model_name}' not found in leaderboard")

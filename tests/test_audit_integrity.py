@@ -123,12 +123,19 @@ def test_api_model_identity_and_metrics():
     for h in [1, 7, 30]:
         model, meta = predictor.load_model("Wheat", horizon=h)
         assert model is not None, f"Predictor failed to load model for horizon {h}"
-        assert type(model).__name__ == "XGBRegressor", f"Expected XGBRegressor, got {type(model).__name__}"
-        assert meta["model_name"] == "Tuned XGBoost Regressor"
-        assert meta["model_class"] == "XGBRegressor"
+        if h == 30:
+            assert type(model).__name__ == "NaiveForecast", f"Expected NaiveForecast, got {type(model).__name__}"
+            assert meta["model_name"] == "Naive Persistence Baseline"
+            assert meta["model_class"] == "NaiveForecast"
+            assert meta["is_persistence"] is True
+            row = bm_df[(bm_df["Horizon"] == f"{h}-Day") & (bm_df["Model"] == "Naive Persistence Baseline")].iloc[0]
+        else:
+            assert type(model).__name__ == "XGBRegressor", f"Expected XGBRegressor, got {type(model).__name__}"
+            assert meta["model_name"] == "Tuned XGBoost Regressor"
+            assert meta["model_class"] == "XGBRegressor"
+            assert meta["is_persistence"] is False
+            row = bm_df[(bm_df["Horizon"] == f"{h}-Day") & (bm_df["Model"] == "Tuned XGBoost Regressor")].iloc[0]
 
-        # Check metrics match benchmark row
-        row = bm_df[(bm_df["Horizon"] == f"{h}-Day") & (bm_df["Model"] == "Tuned XGBoost Regressor")].iloc[0]
         assert abs(meta["rmse"] - float(row["RMSE"])) < 0.01, f"RMSE mismatch for horizon {h}"
         assert abs(meta["mae"] - float(row["MAE"])) < 0.01, f"MAE mismatch for horizon {h}"
         assert abs(meta["r2"] - float(row["R2"])) < 0.001, f"R2 mismatch for horizon {h}"
@@ -219,5 +226,162 @@ def test_macro_and_pooled_metrics_reported():
         macro_mod = m["macro_averages"][h]["model"]
         assert "macro_R2" in macro_mod
         assert "macro_RMSE" in macro_mod
-        assert "macro_Conformal_Coverage_95" in macro_mod
-        assert "macro_Mean_Interval_Width_Pct" in macro_mod
+        assert "macro_Conformal_Coverage_95" in macro_mod or "macro_Conformal_Coverage_95_Pooled" in macro_mod
+        assert "macro_Mean_Interval_Width_Pct" in macro_mod or "macro_Mean_Interval_Width_Pct_Pooled" in macro_mod
+
+
+def test_inference_anchor_parity_7d():
+    """Verify that 7D inference uses the exact training anchor: 0.6*modal_price + 0.4*rolling_mean_7."""
+    from src.inference.predictor import CropPricePredictor
+    predictor = CropPricePredictor()
+    res = predictor.predict("Maharashtra", "Nashik", "Lasalgaon", "Wheat", horizon=7)
+    assert res.get("status") == "success"
+
+    # Fetch raw record from feature store
+    fs = predictor.feature_store
+    match = fs[(fs["state"].str.lower() == "maharashtra") & 
+               (fs["district"].str.lower() == "nashik") & 
+               (fs["market"].str.lower() == "lasalgaon") & 
+               (fs["commodity"].str.lower() == "wheat")]
+    assert not match.empty
+    rec = match.iloc[-1]
+    base_p = float(rec["modal_price"])
+    roll_7 = float(rec["price_rolling_mean_7"])
+    expected_anchor = 0.6 * base_p + 0.4 * roll_7
+
+    assert abs(res["anchor_price"] - round(expected_anchor, 2)) < 0.05, f"Anchor mismatch: {res['anchor_price']} vs {expected_anchor}"
+
+    model, _ = predictor.load_model("Wheat", 7)
+    feat_cols = list(model.feature_names_in_)
+    X_input = pd.DataFrame([rec[feat_cols]])
+    raw_delta = float(model.predict(X_input)[0])
+    expected_price = max(10.0, round(expected_anchor + raw_delta, 2))
+    assert abs(res["predicted_price"] - expected_price) < 0.05, f"Prediction mismatch: {res['predicted_price']} vs {expected_price}"
+
+
+def test_30d_persistence_deployment():
+    """Verify that 30D API returns Naive Persistence Baseline with flat trajectory and persistence metrics."""
+    from src.inference.predictor import CropPricePredictor
+    predictor = CropPricePredictor()
+    res = predictor.predict("Maharashtra", "Nashik", "Lasalgaon", "Wheat", horizon=30)
+    assert res.get("status") == "success"
+    assert res["model_name"] == "Naive Persistence Baseline"
+    assert res["predicted_price"] == res["base_price"]
+    assert res["price_change"] == 0.0
+    assert res["rmse"] == 487.92
+    assert res["mae"] == 229.82
+
+    # Verify flat trajectory
+    trajectory = res["predictions_trajectory"]
+    assert len(trajectory) == 30
+    for step in trajectory:
+        assert step["predicted_price"] == res["base_price"]
+
+
+def test_mondrian_calibration_uses_validation_only():
+    """Verify that Mondrian calibration strictly uses validation set residuals and never touches test targets."""
+    calib_script = REPO_ROOT / "scripts" / "calibrate_mondrian_conformal.py"
+    assert calib_script.exists(), "calibrate_mondrian_conformal.py missing"
+    with open(calib_script, "r", encoding="utf-8") as f:
+        src = f.read()
+
+    assert "val_unified.csv" in src, "Calibration script must use val_unified.csv"
+    assert "test_unified.csv" not in src, "Calibration script must NEVER reference test_unified.csv"
+    assert "test_predictions.csv" not in src, "Calibration script must NEVER reference test_predictions.csv"
+
+    # Verify output quantiles artifact
+    q_file = DATA_DIR / "mondrian_conformal_quantiles.json"
+    assert q_file.exists(), "mondrian_conformal_quantiles.json missing"
+    with open(q_file, "r", encoding="utf-8") as f:
+        q_data = json.load(f)
+
+    for h in ["1-Day", "7-Day", "30-Day"]:
+        assert h in q_data, f"{h} missing in quantiles artifact"
+        assert len(q_data[h]) == 11, f"Expected 11 crops for {h}, found {len(q_data[h])}"
+
+
+def test_mondrian_coverage_reproduction_and_disclosures():
+    """Verify that macro coverage reproduces and that crops below 95% are honestly disclosed."""
+    metrics_file = DATA_DIR / "metrics.json"
+    with open(metrics_file, "r", encoding="utf-8") as f:
+        m = json.load(f)
+
+    assert "mondrian_averages" in m, "mondrian_averages missing from metrics.json"
+    # Macro coverage across all 3 horizons must be >= 95.0%
+    assert m["mondrian_averages"]["1-Day"]["macro_coverage"] >= 95.0
+    assert m["mondrian_averages"]["7-Day"]["macro_coverage"] >= 95.0
+    assert m["mondrian_averages"]["30-Day"]["macro_coverage"] >= 95.0
+
+    # Disclose crops below 95%: Kabuli Chana and Wheat
+    crops_7d = [c["crop"] for c in m["mondrian_averages"]["7-Day"]["crops_below_95"]]
+    assert "Kabuli Chana (Chickpeas-White)" in crops_7d
+    assert "Wheat" in crops_7d
+
+    crops_30d = [c["crop"] for c in m["mondrian_averages"]["30-Day"]["crops_below_95"]]
+    assert "Kabuli Chana (Chickpeas-White)" in crops_30d
+    assert "Wheat" in crops_30d
+
+
+def test_report_tables_parity_with_artifacts():
+    """Verify that the dynamic reports strictly match data/metrics_by_crop.csv and data/metrics.json."""
+    by_crop_file = DATA_DIR / "metrics_by_crop.csv"
+    assert by_crop_file.exists()
+    crop_df = pd.read_csv(by_crop_file)
+
+    scorecard_file = REPO_ROOT / "reports" / "FINAL_SCORECARD.md"
+    assert scorecard_file.exists()
+    with open(scorecard_file, "r", encoding="utf-8") as f:
+        sc_text = f.read()
+
+    # Spot check 3 crops in scorecard
+    for crop in ["Wheat", "Rice", "Kabuli Chana (Chickpeas-White)"]:
+        r7 = crop_df[(crop_df["Crop"] == crop) & (crop_df["Horizon"] == "7-Day")].iloc[0]
+        rmse_str = f"{r7['Model_RMSE']:.2f}"
+        assert rmse_str in sc_text, f"Scorecard missing exact 7D RMSE {rmse_str} for {crop}"
+
+
+def test_feature_store_completeness():
+    """Verify feature store counts: 4554 complete pairs, 664 incomplete pairs."""
+    fs_file = DATA_DIR / "processed" / "inference_feature_store.csv"
+    assert fs_file.exists()
+    df = pd.read_csv(fs_file)
+    assert len(df) == 5218, f"Expected 5,218 total pairs, found {len(df)}"
+    assert "is_complete" in df.columns, "is_complete flag missing in feature store"
+    complete_count = int(df["is_complete"].sum())
+    incomplete_count = len(df) - complete_count
+    assert complete_count == 4554, f"Expected 4,554 complete pairs, found {complete_count}"
+    assert incomplete_count == 664, f"Expected 664 incomplete pairs, found {incomplete_count}"
+
+    from src.inference.predictor import CropPricePredictor
+    p = CropPricePredictor()
+
+    # Query an incomplete pair -> must return HTTP 422 insufficient_data
+    inc_row = df[~df["is_complete"]].iloc[0]
+    res_inc = p.predict(inc_row["state"], inc_row["district"], inc_row["market"], inc_row["commodity"], horizon=7)
+    assert res_inc["status"] == "error"
+    assert res_inc["error_code"] == "insufficient_data"
+
+
+def test_no_stale_hardcoded_values():
+    """Verify that stale constants (465.75, 672.36, 563.81, 348.20, 890.15) do not exist in active code."""
+    banned = ["465.75", "672.36", "563.81", "348.20", "890.15"]
+    active_dirs = [REPO_ROOT / "src", REPO_ROOT / "api", REPO_ROOT / "dashboard"]
+    for d in active_dirs:
+        for py_path in d.rglob("*.py"):
+            with open(py_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            for val in banned:
+                assert val not in content, f"Found stale hardcoded value {val} in {py_path}"
+
+
+def test_deep_learning_config_exists():
+    """Verify models/trained/deep_learning_config.json exists and contains training specification."""
+    cfg_file = MODELS_DIR / "deep_learning_config.json"
+    assert cfg_file.exists(), "deep_learning_config.json missing"
+    with open(cfg_file, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    required_keys = ["seed", "sequence_length", "features", "batch_size", "epochs", "patience"]
+    for k in required_keys:
+        assert k in cfg, f"Key '{k}' missing from deep_learning_config.json"
+

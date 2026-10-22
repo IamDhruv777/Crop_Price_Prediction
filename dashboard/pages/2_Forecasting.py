@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 import sys
+import json
 
 # Ensure dashboard folder is in sys.path for i18n import
 dashboard_dir = Path(__file__).parents[1]
@@ -61,6 +62,21 @@ else:
 DATA_DIR = Path("data")
 PREDS_FILE = DATA_DIR / "test_predictions.csv"
 METRICS_FILE = DATA_DIR / "master_model_leaderboard.csv"
+MONDRIAN_FILE = DATA_DIR / "mondrian_conformal_quantiles.json"
+
+
+def get_mondrian_delta(crop: str, h_label_str: str) -> float:
+    if MONDRIAN_FILE.exists():
+        try:
+            with open(MONDRIAN_FILE, "r", encoding="utf-8") as f_q:
+                mq = json.load(f_q)
+            h_key = "1-Day" if "1" in h_label_str else ("30-Day" if "30" in h_label_str else "7-Day")
+            if h_key in mq and crop in mq[h_key]:
+                return float(mq[h_key][crop])
+        except Exception:
+            pass
+    return 0.0
+
 
 try:
     preds_df = pd.read_csv(PREDS_FILE)
@@ -106,7 +122,7 @@ try:
     delta_col = f'uncertainty_delta_{h_suffix}' if f'uncertainty_delta_{h_suffix}' in market_df.columns else 'uncertainty_delta_7d'
     
     pred_p = float(latest_row[pred_col]) if pred_col in latest_row else cur_p
-    delta_val = float(latest_row[delta_col]) if delta_col in latest_row else 563.81
+    delta_val = float(latest_row[delta_col]) if delta_col in latest_row else get_mondrian_delta(selected_crop, h_suffix)
     pct_drift = ((pred_p - cur_p) / cur_p) * 100 if cur_p > 0 else 0.0
     diff_rupees = round(pred_p - cur_p, 2)
     trolley_rupees = round(abs(diff_rupees) * 50, 0)

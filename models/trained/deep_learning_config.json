@@ -1,0 +1,19 @@
+{
+  "seed": 42,
+  "sequence_length": 7,
+  "features": 48,
+  "num_features": 48,
+  "batch_size": 256,
+  "learning_rate": 0.005,
+  "weight_decay": 0.0001,
+  "epochs": 15,
+  "patience": 3,
+  "early_stopping_patience": 3,
+  "loss_fn": "SmoothL1Loss(beta=0.5)",
+  "models": [
+    "PyTorch LSTM",
+    "PyTorch GRU",
+    "Temporal CNN (TCN)",
+    "Time-Series Transformer"
+  ]
+}

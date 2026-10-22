@@ -278,11 +278,13 @@ def run_optimized_deep_learning_benchmark(epochs=8, patience=3):
     config = {
         "seed": RANDOM_SEED,
         "sequence_length": T,
+        "features": F,
         "num_features": F,
         "batch_size": 256,
         "learning_rate": 0.005,
         "weight_decay": 1e-4,
         "epochs": epochs,
+        "patience": patience,
         "early_stopping_patience": patience,
         "loss_fn": "SmoothL1Loss(beta=0.5)",
         "models": list(models.keys())

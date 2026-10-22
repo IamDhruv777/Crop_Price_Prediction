@@ -1,16 +1,12 @@
 """
-Unified Model Evaluation Engine — Single Source of Truth for Model Metrics.
-Forensic Audit Compliant:
-- Evaluates Model vs. Naive Persistence Baseline across all horizons.
-- Computes Pooled Overall metrics AND Equal-Crop Macro Averages.
-- Computes Skill Scores (R2 Skill, MAE Improvement, MAPE Improvement, RMSE Improvement).
-- Computes Directional Accuracy, Precision, Recall, and F1.
-- Computes Conformal Coverage and Mean Interval Width (Absolute and % of Price).
-- Outputs:
-    1. data/metrics.json
-    2. data/metrics_by_crop.csv
-    3. data/metrics_vs_persistence.csv
-    4. data/leaderboard_by_horizon.csv
+Production Evaluation Engine for Crop Price Forecasting.
+Calculates leak-free out-of-sample metrics, Skill Scores relative to Naive Persistence,
+Pooled Overall and Equal-Crop Macro averages, and Mondrian crop-stratified conformal coverage.
+Generates:
+  - data/metrics.json
+  - data/metrics_by_crop.csv
+  - data/metrics_vs_persistence.csv
+  - data/leaderboard_by_horizon.csv
 """
 import argparse
 import json
@@ -18,47 +14,51 @@ import logging
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (
-    r2_score, mean_squared_error, mean_absolute_error,
-    accuracy_score, precision_score, recall_score, f1_score
-)
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, accuracy_score, f1_score, precision_score, recall_score
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MONDRIAN_FILE = REPO_ROOT / "data" / "mondrian_conformal_quantiles.json"
 
-def compute_metrics_slice(y_true, y_pred, y_base=None, lower=None, upper=None):
-    """Computes comprehensive metric suite for a single subset."""
+
+def compute_metrics_slice(y_true, y_pred, y_anchor, lower=None, upper=None):
+    """
+    Computes regression, commercial tolerance, directional, and uncertainty metrics on a data slice.
+    """
     n = len(y_true)
     if n == 0:
         return {}
 
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
+    y_anchor = np.asarray(y_anchor, dtype=float)
 
-    # 1. Regression Metrics
-    r2 = float(r2_score(y_true, y_pred))
     mse = float(mean_squared_error(y_true, y_pred))
     rmse = float(np.sqrt(mse))
     mae = float(mean_absolute_error(y_true, y_pred))
 
-    # Avoid zero division in MAPE
-    denom = np.where(np.abs(y_true) < 1e-5, 1e-5, np.abs(y_true))
-    pe = np.abs(y_true - y_pred) / denom
-    mape = float(np.mean(pe) * 100.0)
-    smape = float(np.mean(2.0 * np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred) + 1e-5)) * 100.0)
-    relative_accuracy = float(max(0.0, 100.0 - mape))
+    denom = np.where(y_true == 0, 1e-5, y_true)
+    abs_pct_err = np.abs((y_true - y_pred) / denom)
+    mape = float(np.mean(abs_pct_err) * 100.0)
 
-    # 2. Tolerance Accuracies
-    tol_5 = float(np.mean(pe <= 0.05) * 100.0)
-    tol_10 = float(np.mean(pe <= 0.10) * 100.0)
-    tol_20 = float(np.mean(pe <= 0.20) * 100.0)
+    smape_denom = np.where((np.abs(y_true) + np.abs(y_pred)) == 0, 1e-5, (np.abs(y_true) + np.abs(y_pred)) / 2.0)
+    smape = float(np.mean(np.abs(y_true - y_pred) / smape_denom) * 100.0)
 
-    # 3. Directional Trajectory (Up vs Down/Steady relative to baseline)
-    if y_base is not None:
-        y_base = np.asarray(y_base, dtype=float)
-        act_dir = (y_true >= y_base).astype(int)
-        pred_dir = (y_pred >= y_base).astype(int)
+    relative_accuracy = float(max(0.0, min(100.0, 100.0 - mape)))
+
+    tol_5 = float(np.mean(abs_pct_err <= 0.05) * 100.0)
+    tol_10 = float(np.mean(abs_pct_err <= 0.10) * 100.0)
+    tol_20 = float(np.mean(abs_pct_err <= 0.20) * 100.0)
+
+    r2 = float(r2_score(y_true, y_pred)) if np.var(y_true) > 1e-8 else 0.0
+
+    # Directional up/down movement relative to anchor
+    act_dir = (y_true >= y_anchor).astype(int)
+    pred_dir = (y_pred >= y_anchor).astype(int)
+
+    if len(np.unique(act_dir)) > 1:
         dir_acc = float(accuracy_score(act_dir, pred_dir) * 100.0)
         dir_prec = float(precision_score(act_dir, pred_dir, zero_division=0) * 100.0)
         dir_rec = float(recall_score(act_dir, pred_dir, zero_division=0) * 100.0)
@@ -66,7 +66,6 @@ def compute_metrics_slice(y_true, y_pred, y_base=None, lower=None, upper=None):
     else:
         dir_acc = dir_prec = dir_rec = dir_f1 = None
 
-    # 4. Conformal Interval Metrics
     if lower is not None and upper is not None:
         lower = np.asarray(lower, dtype=float)
         upper = np.asarray(upper, dtype=float)
@@ -134,11 +133,22 @@ def evaluate_predictions_file(pred_file_path: Path):
     df = pd.read_csv(pred_file_path)
     logger.info(f"Loaded predictions: {len(df):,} rows from {pred_file_path}")
 
+    # Load Mondrian quantiles if available
+    mondrian_dict = {}
+    if MONDRIAN_FILE.exists():
+        try:
+            with open(MONDRIAN_FILE, "r", encoding="utf-8") as f:
+                mondrian_dict = json.load(f)
+            logger.info(f"Loaded Mondrian conformal quantiles from {MONDRIAN_FILE}")
+        except Exception as e:
+            logger.warning(f"Could not load Mondrian quantiles: {e}")
+
     results = {
         "by_horizon": {},
         "persistence_by_horizon": {},
         "skill_scores_by_horizon": {},
         "macro_averages": {},
+        "mondrian_averages": {},
         "by_crop": []
     }
 
@@ -206,9 +216,14 @@ def evaluate_predictions_file(pred_file_path: Path):
         if "commodity" in sub.columns:
             h_crop_model_list = []
             h_crop_pers_list = []
+            h_crop_mondrian_cov_list = []
+            h_crop_mondrian_w_pct_list = []
+            crops_below_95 = []
+
+            h_mondrian_q = mondrian_dict.get(h_label, {})
 
             for crop in sorted(sub["commodity"].dropna().unique()):
-                c_sub = sub[sub["commodity"] == crop]
+                c_sub = sub[sub["commodity"] == crop].copy()
                 c_act = c_sub[act_col].values
                 c_mod = c_sub[pred_col].values
                 c_pers = c_sub[base_col].values
@@ -218,6 +233,23 @@ def evaluate_predictions_file(pred_file_path: Path):
                 c_m_mod = compute_metrics_slice(c_act, c_mod, c_pers, c_l, c_u)
                 c_m_pers = compute_metrics_slice(c_act, c_pers, c_pers, None, None)
                 c_skills = compute_skill_scores(c_m_mod, c_m_pers)
+
+                # Compute Mondrian crop-stratified conformal bounds
+                q95_m = h_mondrian_q.get(crop)
+                if q95_m is not None:
+                    # For 30D persistence, prediction is c_pers; for 1D/7D, prediction is c_mod
+                    c_center = c_pers if h_label == "30-Day" else c_mod
+                    c_l_m = np.maximum(0.0, c_center - q95_m)
+                    c_u_m = c_center + q95_m
+                    in_m = (c_act >= c_l_m) & (c_act <= c_u_m)
+                    m_cov = round(float(np.mean(in_m) * 100.0), 2)
+                    m_width = round(float(2 * q95_m), 2)
+                    denom = np.where(c_act == 0, 1e-5, c_act)
+                    m_width_pct = round(float(np.mean(m_width / denom) * 100.0), 2)
+                    if m_cov < 95.0:
+                        crops_below_95.append({"crop": crop, "coverage": m_cov})
+                else:
+                    m_cov = m_width = m_width_pct = None
 
                 crop_entry = {
                     "Crop": crop,
@@ -236,15 +268,22 @@ def evaluate_predictions_file(pred_file_path: Path):
                     "Persistence_RelAcc": c_m_pers["Relative_Accuracy"],
                     "Model_Tol10": c_m_mod["Tolerance_10pct"],
                     "Persistence_Tol10": c_m_pers["Tolerance_10pct"],
-                    "Coverage_95": c_m_mod["Conformal_Coverage_95"],
-                    "Mean_Width": c_m_mod["Mean_Interval_Width"],
-                    "Mean_Width_Pct": c_m_mod["Mean_Interval_Width_Pct"]
+                    "Coverage_95_Pooled": c_m_mod["Conformal_Coverage_95"],
+                    "Mean_Width_Pooled": c_m_mod["Mean_Interval_Width"],
+                    "Mean_Width_Pct_Pooled": c_m_mod["Mean_Interval_Width_Pct"],
+                    "Mondrian_q95": q95_m,
+                    "Coverage_95_Mondrian": m_cov,
+                    "Mean_Width_Mondrian": m_width,
+                    "Mean_Width_Pct_Mondrian": m_width_pct
                 }
                 crop_rows.append(crop_entry)
                 h_crop_model_list.append(c_m_mod)
                 h_crop_pers_list.append(c_m_pers)
+                if m_cov is not None:
+                    h_crop_mondrian_cov_list.append(m_cov)
+                    h_crop_mondrian_w_pct_list.append(m_width_pct)
 
-            # Compute Macro Averages (unweighted mean across crops)
+            # Compute Macro Averages (unweighted mean across all 11 crops)
             macro_mod = {
                 "macro_R2": round(float(np.mean([m["R2"] for m in h_crop_model_list])), 4),
                 "macro_RMSE": round(float(np.mean([m["RMSE"] for m in h_crop_model_list])), 2),
@@ -253,7 +292,9 @@ def evaluate_predictions_file(pred_file_path: Path):
                 "macro_Relative_Accuracy": round(float(np.mean([m["Relative_Accuracy"] for m in h_crop_model_list])), 2),
                 "macro_Tolerance_10pct": round(float(np.mean([m["Tolerance_10pct"] for m in h_crop_model_list])), 2),
                 "macro_Conformal_Coverage_95": round(float(np.mean([m["Conformal_Coverage_95"] for m in h_crop_model_list if m["Conformal_Coverage_95"] is not None])), 2),
-                "macro_Mean_Interval_Width_Pct": round(float(np.mean([m["Mean_Interval_Width_Pct"] for m in h_crop_model_list if m["Mean_Interval_Width_Pct"] is not None])), 2)
+                "macro_Conformal_Coverage_95_Pooled": round(float(np.mean([m["Conformal_Coverage_95"] for m in h_crop_model_list if m["Conformal_Coverage_95"] is not None])), 2),
+                "macro_Mean_Interval_Width_Pct": round(float(np.mean([m["Mean_Interval_Width_Pct"] for m in h_crop_model_list if m["Mean_Interval_Width_Pct"] is not None])), 2),
+                "macro_Mean_Interval_Width_Pct_Pooled": round(float(np.mean([m["Mean_Interval_Width_Pct"] for m in h_crop_model_list if m["Mean_Interval_Width_Pct"] is not None])), 2)
             }
             macro_pers = {
                 "macro_R2": round(float(np.mean([m["R2"] for m in h_crop_pers_list])), 4),
@@ -275,9 +316,17 @@ def evaluate_predictions_file(pred_file_path: Path):
                 "skills": macro_skills
             }
 
+            if h_crop_mondrian_cov_list:
+                results["mondrian_averages"][h_label] = {
+                    "macro_coverage": round(float(np.mean(h_crop_mondrian_cov_list)), 2),
+                    "macro_interval_width_pct": round(float(np.mean(h_crop_mondrian_w_pct_list)), 2),
+                    "crops_below_95": crops_below_95
+                }
+
+            # Record Macro Row
             comparison_rows.append({
                 "Horizon": h_label,
-                "Target": "Macro Average (Equal Crop)",
+                "Target": "Macro (Equal Crop)",
                 "Model_R2": macro_mod["macro_R2"],
                 "Persistence_R2": macro_pers["macro_R2"],
                 "R2_Skill": macro_skills["macro_R2_Skill"],
@@ -295,11 +344,12 @@ def evaluate_predictions_file(pred_file_path: Path):
                 "Persistence_DirAcc": None,
                 "Model_DirF1": None,
                 "Persistence_DirF1": None,
-                "Coverage_95": macro_mod["macro_Conformal_Coverage_95"],
-                "Mean_Width_Pct": macro_mod["macro_Mean_Interval_Width_Pct"]
+                "Coverage_95": macro_mod["macro_Conformal_Coverage_95_Pooled"],
+                "Mean_Width_Pct": macro_mod["macro_Mean_Interval_Width_Pct_Pooled"]
             })
 
     results["by_crop"] = crop_rows
+    results["mondrian_macro"] = results.get("mondrian_averages", {})
     crop_df = pd.DataFrame(crop_rows)
     comp_df = pd.DataFrame(comparison_rows)
 
@@ -355,11 +405,12 @@ def main():
     print(comp_df[["Horizon", "Target", "Model_R2", "Persistence_R2", "Model_RMSE", "Persistence_RMSE", "Model_MAE", "Persistence_MAE", "Model_RelAcc", "Persistence_RelAcc", "Model_Tol10", "Persistence_Tol10"]].to_string(index=False))
 
     print("\n" + "=" * 95)
-    print("MACRO CONFORMAL COVERAGE & INTERVAL WIDTH (EQUAL CROP AVERAGE)")
+    print("MONDRIAN CONFORMAL COVERAGE & INTERVAL WIDTH (EQUAL CROP AVERAGE)")
     print("=" * 95)
-    for h, data in results.get("macro_averages", {}).items():
-        m = data["model"]
-        print(f"Horizon {h}: Macro Coverage = {m['macro_Conformal_Coverage_95']:.2f}% | Macro Width = {m['macro_Mean_Interval_Width_Pct']:.2f}% of price")
+    for h, data in results.get("mondrian_averages", {}).items():
+        print(f"Horizon {h}: Macro Mondrian Coverage = {data['macro_coverage']:.2f}% | Macro Width = {data['macro_interval_width_pct']:.2f}% of price")
+        if data.get("crops_below_95"):
+            print(f"   * Crops below 95%: {data['crops_below_95']}")
 
 
 if __name__ == "__main__":

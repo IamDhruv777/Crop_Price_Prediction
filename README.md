@@ -17,29 +17,33 @@ A production-grade, spatial-temporal agricultural commodity price forecasting pl
    - Calibrated price forecasts across **1-Day**, **7-Day**, and **30-Day** horizons with mathematically guaranteed coverage intervals ($P_{\text{lower}} \le P_{\text{pred}} \le P_{\text{upper}}$).
 5. **Phase 2 Benchmark Hub Arbitrage & Supply Shock Signals**:
    - Leading price signals from national benchmark hubs (Raichur, Lalitpur, Mumbai, Merta City, Indore, Burdwan, Kota, Dahod) capturing spatial price contagion and arrival supply-shock dynamics.
-6. **Dedicated Per-Crop Champions**:
-   - Specialized champion models trained per commodity to capture distinct perishability, MSP floors, and harvest cycles.
+6. **Multi-Commodity Evaluation**:
+   - Multi-horizon evaluation across 11 major Indian agricultural commodities (Arhar, Black Gram, Cowpea, Green Gram, Kabuli Chana, Lentil, Maize, Rice, Soyabean, Wheat, White Peas).
 
 ---
 
 ## Multi-Model Architecture & Benchmark Leaderboard
 
-Evaluated on over 4.2 million real AGMARKNET transaction records and NASA POWER daily agroclimatology:
+Evaluated on out-of-sample holdout test predictions from AGMARKNET mandi spot prices:
 
-| Architecture Tier | Model Architecture | 7-Day RMSE (₹/Qtl) | MAE (₹/Qtl) | MAPE (%) | $R^2$ Score | Directional Accuracy | F1-Score |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Ensemble Meta-Learner** | **Spatial-Temporal Super Ensemble (Champion)** | **672.36** | **403.04** | **8.00%** | **0.8823** | **57.35%** | **0.5955** |
-| Statistical Baseline | Moving Average Baseline (7-Day) | 691.90 | 417.22 | 8.72% | 0.8753 | 61.26% | 0.6491 |
-| Spatial Graph Neural Net | Spatial Graph (GraphSAGE + XGBoost) | 797.24 | 468.73 | 9.38% | 0.8345 | 57.67% | 0.6274 |
-| Deep Learning | Temporal CNN (TCN - SmoothL1) | 821.86 | 545.20 | 10.75% | 0.8241 | 52.11% | 0.6721 |
-| Classical ML | Random Forest Regressor | 838.08 | 580.85 | 12.15% | 0.8171 | 51.86% | 0.6378 |
-| Statistical Baseline | Naive Persistence Baseline | 869.58 | 410.12 | 8.21% | 0.8031 | 50.20% | 0.6685 |
-| Classical ML | Tuned XGBoost Regressor | 899.43 | 587.78 | 12.01% | 0.7893 | 51.82% | 0.6391 |
-| Deep Learning | PyTorch GRU (SmoothL1) | 904.58 | 589.10 | 11.61% | 0.7869 | 52.26% | 0.6675 |
-| Deep Learning | PyTorch LSTM (SmoothL1) | 917.63 | 592.30 | 11.86% | 0.7807 | 51.12% | 0.6556 |
-| Deep Learning | Time-Series Transformer (SmoothL1) | 936.59 | 620.40 | 12.51% | 0.7716 | 50.12% | 0.6474 |
+| Horizon | Architecture Tier | Model Architecture | RMSE (₹/Qtl) | MAE (₹/Qtl) | MAPE (%) | $R^2$ Score | Enterprise Trust (100−MAPE) |
+| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **1-Day** | Machine Learning | Ridge Autoregressive | 284.40 | 103.65 | 3.11% | 0.9842 | 96.89% |
+| **1-Day** | Machine Learning | XGBoost + Spatial KNN | 285.03 | 95.67 | 2.85% | 0.9842 | 97.15% |
+| **1-Day** | Machine Learning | Tuned XGBoost Regressor | 285.36 | 96.18 | 2.86% | 0.9841 | 97.14% |
+| **1-Day** | Statistical Baseline | Naive Persistence Baseline | 296.10 | 93.95 | 2.81% | 0.9829 | 97.19% |
+| **7-Day** | Deep Learning | Temporal CNN (TCN) | 328.17 | 140.23 | 4.00% | 0.9784 | 96.00% |
+| **7-Day** | Deep Learning | PyTorch GRU | 329.38 | 141.79 | 4.02% | 0.9783 | 95.98% |
+| **7-Day** | Deep Learning | Time-Series Transformer | 330.37 | 141.31 | 4.02% | 0.9781 | 95.98% |
+| **7-Day** | Deep Learning | PyTorch LSTM | 330.79 | 142.20 | 4.05% | 0.9781 | 95.95% |
+| **7-Day** | Ensemble Meta-Learner | Super Ensemble (Stacking) | 332.22 | 147.98 | 4.26% | 0.9779 | 95.74% |
+| **7-Day** | Machine Learning | Tuned XGBoost Regressor | 336.08 | 148.92 | 4.20% | 0.9774 | 95.80% |
+| **7-Day** | Statistical Baseline | Naive Persistence Baseline | 363.38 | 141.90 | 4.08% | 0.9735 | 95.92% |
+| **30-Day** | Statistical Baseline | Naive Persistence Baseline | 487.92 | 229.82 | 6.48% | 0.9512 | 93.52% |
+| **30-Day** | Ensemble Meta-Learner | Super Ensemble (Stacking) | 500.86 | 260.80 | 7.37% | 0.9485 | 92.63% |
+| **30-Day** | Machine Learning | Tuned XGBoost Regressor | 542.58 | 283.34 | 7.58% | 0.9396 | 92.42% |
 
-*Note: The test set average price is ₹5,316/Qtl (dominated by high-value pulses). An MAE of ₹403/Qtl corresponds to an average error of only ~₹4.0/kg, yielding a 92%–95% overall trust score.*
+*Note: For 30-Day forecasts, the Naive Persistence Baseline strictly outperforms all ML and deep learning models (Persistence RMSE ₹487.92 vs Model ₹500.86; MAE ₹229.82 vs ₹260.80). Consequently, Naive Persistence is the production-deployed model for 30-Day horizons.*
 
 ---
 
