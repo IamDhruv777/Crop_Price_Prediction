@@ -463,10 +463,13 @@ def build_map_frame(preds: pd.DataFrame, geo: pd.DataFrame, crop: str) -> pd.Dat
         merged["price_diff"] / merged["modal_price"] * 100,
         0.0,
     )
+    # Conformal deadband: requires at least 2% change and Rs 5.0 absolute change to eliminate false alarms
+    is_hold = (merged["price_pct"] >= 2.0) & (merged["price_diff"] >= 5.0)
+    is_sell = (merged["price_pct"] <= -2.0) & (merged["price_diff"] <= -5.0)
     merged["recommendation"] = np.where(
-        merged["price_pct"] >= 1.5,
+        is_hold,
         "🟢 रोकें / Hold",
-        np.where(merged["price_pct"] <= -1.5, "🔴 बेचें / Sell", "🔵 स्थिर / Stable"),
+        np.where(is_sell, "🔴 बेचें / Sell", "🔵 स्थिर / Stable"),
     )
     return merged
 

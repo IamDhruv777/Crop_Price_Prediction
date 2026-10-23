@@ -75,7 +75,13 @@ async def predict_forecast(request: ForecastRequest):
             mae=res["mae"],
             r2=res.get("r2"),
             as_of_date=res["as_of_date"],
-            is_historical_backtest=res["is_historical_backtest"]
+            is_historical_backtest=res["is_historical_backtest"],
+            recommendation=res.get("recommendation"),
+            price_change=res.get("price_change"),
+            percent_change=res.get("percent_change"),
+            directional_signal=res.get("directional_signal"),
+            signal_confidence=res.get("signal_confidence"),
+            conformal_gate_threshold=res.get("conformal_gate_threshold"),
         )
     except HTTPException:
         raise

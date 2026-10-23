@@ -78,6 +78,12 @@ class ForecastResponse(BaseModel):
     r2: Optional[float] = None
     as_of_date: Optional[str] = None
     is_historical_backtest: bool = True
+    recommendation: Optional[str] = None
+    price_change: Optional[float] = None
+    percent_change: Optional[float] = None
+    directional_signal: Optional[str] = None
+    signal_confidence: Optional[str] = None
+    conformal_gate_threshold: Optional[float] = None
 
 class MarketInfo(BaseModel):
     market_id: str

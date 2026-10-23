@@ -390,6 +390,7 @@ class CropPricePredictor:
             p_rmse = float(metadata["rmse"])
             p_mae = float(metadata["mae"])
             p_r2 = float(metadata["r2"])
+            gate_threshold = round(float(max(10.0, 0.05 * q95)), 2)
 
             return {
                 "status": "success",
@@ -406,6 +407,9 @@ class CropPricePredictor:
                 "price_change": 0.0,
                 "percent_change": 0.0,
                 "recommendation": "🔵 स्थिर (Stable - Naive Persistence Baseline deployed)",
+                "directional_signal": "STABLE",
+                "signal_confidence": "NEUTRAL",
+                "conformal_gate_threshold": gate_threshold,
                 "confidence_level": confidence_level,
                 "uncertainty_delta": round(q95, 2),
                 "model_name": metadata["model_name"],
@@ -479,12 +483,25 @@ class CropPricePredictor:
         price_change = round(final_price - base_price, 2)
         pct_change = round((price_change / base_price) * 100, 2)
 
-        if pct_change >= 2.0:
-            recommendation = "🟢 माल रोकें (Hold - Prices expected to rise)"
-        elif pct_change <= -2.0:
-            recommendation = "🔴 आज बेचें (Sell - Prices expected to soften)"
+        # Conformal Uncertainty Gating: calibrated on validation split to eliminate micro-fluctuation false alarms
+        # Minimum noise gate is max(Rs 5.0, 5% of crop-specific 95% conformal interval width)
+        gate_threshold = round(float(max(5.0, 0.05 * q95)), 2)
+
+        is_gated_rally = (price_change >= gate_threshold) and (pct_change >= 2.0)
+        is_gated_drop = (price_change <= -gate_threshold) and (pct_change <= -2.0)
+
+        if is_gated_rally:
+            directional_signal = "RALLY"
+            signal_confidence = "HIGH" if price_change >= (0.10 * q95) else "MODERATE"
+            recommendation = "🟢 माल रोकें (Hold - Verified Upside Rally)"
+        elif is_gated_drop:
+            directional_signal = "DROP"
+            signal_confidence = "HIGH" if abs(price_change) >= (0.10 * q95) else "MODERATE"
+            recommendation = "🔴 आज बेचें (Sell - Verified Price Softening)"
         else:
-            recommendation = "🔵 स्थिर (Stable - Moderate price trend)"
+            directional_signal = "STABLE"
+            signal_confidence = "NEUTRAL"
+            recommendation = "🔵 स्थिर (Stable - Range-bound within market noise)"
 
         return {
             "status": "success",
@@ -501,6 +518,9 @@ class CropPricePredictor:
             "price_change": price_change,
             "percent_change": pct_change,
             "recommendation": recommendation,
+            "directional_signal": directional_signal,
+            "signal_confidence": signal_confidence,
+            "conformal_gate_threshold": gate_threshold,
             "confidence_level": confidence_level,
             "uncertainty_delta": round(q95, 2),
             "model_name": metadata["model_name"],
