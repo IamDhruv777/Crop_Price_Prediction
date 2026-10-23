@@ -57,6 +57,32 @@ st.session_state["display_mode"] = display_mode
 GEO_PATH = Path("data/raw/geography/market_master.csv")
 PREDS_PATH = Path("data/deployed_test_predictions.csv")
 EDGES_PATH = Path("data/spatial/spatial_graph_edges.csv")
+MONDRIAN_PATH = Path("data/mondrian_conformal_quantiles.json")
+
+_DEFAULT_MONDRIAN_DELTA = {"1-Day": 950.0, "7-Day": 1200.0, "30-Day": 1950.0}
+
+
+def get_mondrian_default_delta(horizon: str, crop: str | None = None) -> float:
+    """Return the calibrated 95% conformal delta for a crop/horizon.
+
+    Values come from validation-only calibration in
+    ``data/mondrian_conformal_quantiles.json``. If a crop is missing, fall back
+    to the median of the calibrated per-crop deltas for that horizon. The
+    hard-coded values are only a last resort when the artifact is unavailable.
+    """
+    fallback = _DEFAULT_MONDRIAN_DELTA.get(horizon, 1200.0)
+    try:
+        with open(MONDRIAN_PATH, "r", encoding="utf-8") as handle:
+            quantiles = json.load(handle)
+        per_crop = quantiles.get(horizon, {})
+        if crop and crop in per_crop:
+            return float(per_crop[crop])
+        numeric = [float(value) for value in per_crop.values() if isinstance(value, (int, float))]
+        if numeric:
+            return float(np.median(numeric))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    return fallback
 
 if not GEO_PATH.exists():
     st.error("Market Master geography file not found at `data/raw/geography/market_master.csv`.")
@@ -111,10 +137,13 @@ if PREDS_PATH.exists():
         right_on='market',
         how='left'
     )
-    merged_map['modal_price'] = merged_map['modal_price'].fillna(geo_df['latitude'] * 50 + 1400)
-    merged_map['selected_forecast'] = merged_map[pred_col].fillna(merged_map['modal_price'] * (1.01 if "1" in h_suffix else (1.05 if "30" in h_suffix else 1.02)))
-    merged_map['price_drift_pct'] = ((merged_map['selected_forecast'] - merged_map['modal_price']) / merged_map['modal_price']) * 100
     merged_map['conformal_delta'] = merged_map[delta_col].fillna(get_mondrian_default_delta(h_label, clean_crop if 'All Commodities' not in selected_commodity else None))
+
+    # Only plot mandis that actually have a real observed price and a real
+    # forecast for this crop/horizon. Never invent a price from coordinates.
+    merged_map['selected_forecast'] = merged_map[pred_col]
+    merged_map = merged_map.dropna(subset=['modal_price', 'selected_forecast']).copy()
+    merged_map['price_drift_pct'] = ((merged_map['selected_forecast'] - merged_map['modal_price']) / merged_map['modal_price']) * 100
 else:
     h_label = "7-Day"
     h_hindi = "7 दिन"
@@ -133,6 +162,13 @@ filtered_map = merged_map.copy()
 if "All States" not in selected_state:
     clean_state = selected_state.split(" (")[0]
     filtered_map = filtered_map[filtered_map['state'] == clean_state]
+
+if filtered_map.empty:
+    st.warning(
+        "No mandi has both a recorded price and a forecast for this crop/horizon/state combination. "
+        "Please choose another commodity, horizon or state."
+    )
+    st.stop()
 
 # Summary KPI metrics
 st.markdown(f"### 📍 " + (f"मंडी नेटवर्क सारांश ({h_hindi} बाद का अनुमान)" if is_hi else f"Dynamic Regional Network Overview ({h_label})"))

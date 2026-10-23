@@ -15,6 +15,7 @@ A production-grade, spatial-temporal agricultural commodity price forecasting pl
    - Multi-level choropleth map drilldown: **Nationwide $\rightarrow$ State $\rightarrow$ District $\rightarrow$ APMC Mandi**.
 4. **Multi-Horizon Forecasting with 95% Conformal Confidence Intervals**:
    - Calibrated price forecasts across **1-Day**, **7-Day**, and **30-Day** horizons with empirically calibrated conformal prediction intervals ($P_{\text{lower}} \le P_{\text{pred}} \le P_{\text{upper}}$).
+   - The farmer dashboard includes a **specific-date planner** for any day up to 30 days after the latest historical trading day. Only days 1, 7, and 30 are direct model outputs; all other dates are clearly labelled as straight-line interpolation between those anchors, not as separately validated daily forecasts.
 5. **Phase 2 Benchmark Hub Arbitrage & Supply Shock Signals**:
    - Leading price signals from national benchmark hubs (Raichur, Lalitpur, Mumbai, Merta City, Indore, Burdwan, Kota, Dahod) capturing spatial price contagion and arrival supply-shock dynamics.
 6. **Multi-Commodity Evaluation**:
@@ -99,6 +100,17 @@ streamlit run dashboard/app.py
 ```
 Open [http://localhost:8501](http://localhost:8501) in your browser.
 
+The dashboard opens on a bilingual landing page, then asks you to sign up or log in before showing the personalised farmer / vendor / trader decision screen. Accounts are stored locally in `data/.app_users.json` (password hashes only; the file is git-ignored).
+
+Demo accounts:
+
+| Role | Mobile | Password |
+|:---|:---|:---|
+| Farmer | `9999999999` | `kisan1234` |
+| Shopkeeper / Vendor | `8888888888` | `vyapari1234` |
+
+The dashboard is a historical backtest demo over Agmarknet data (Oct 2016 – Jun 2017). It is not a live market feed.
+
 #### Launch FastAPI Backend Server
 ```bash
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
@@ -109,10 +121,19 @@ Explore interactive Swagger documentation at [http://localhost:8000/docs](http:/
 
 ## Running Automated Tests
 
-Run the comprehensive 52-test automated test suite covering inference bounds, deployment parity, zero-leakage causal lags, spatial distance, and API endpoints:
+Run the comprehensive 70-test automated test suite covering inference bounds, deployment parity, zero-leakage causal lags, spatial distance, API endpoints, dashboard authentication, the date planner, and the high-zoom map:
 ```bash
 pytest tests/
 ```
+
+### Verify the dashboard's claims yourself
+
+Run the independent verifier from the repository root:
+```bash
+python scripts/verify_dashboard_claims.py
+```
+
+It recomputes the deployed RMSE, MAE, $R^2$, sample counts, and conformal coverage directly from `data/deployed_test_predictions.csv`; compares them with `data/metrics_deployed.json`; prints SHA-256 hashes of the model/data artifacts; checks the 1/7/30-day date-planner anchors; and confirms the high-zoom map guards are present. It also prints what the checks do **not** prove: live-price accuracy, an individual farmer's guaranteed 95% band, or genuine daily models for days 2-6 and 8-29.
 
 ---
 

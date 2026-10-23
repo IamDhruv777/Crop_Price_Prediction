@@ -1,491 +1,1457 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from pathlib import Path
+"""
+Krishi Bhav Saathi — landing, sign-in and decision dashboard.
+
+Flow: emotional landing page -> login / sign-up -> personalised dashboard.
+This is a demo experience over the historical Agmarknet holdout set, not a
+live market feed. All prices shown come from data/deployed_test_predictions.csv.
+"""
+from __future__ import annotations
+
+import json
 import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 import streamlit.components.v1 as st_components
 
-# Dual compatibility for Plotly map functions
-scatter_map_fn = getattr(px, 'scatter_map', getattr(px, 'scatter_mapbox', None))
-style_key = 'map_style' if hasattr(px, 'scatter_map') else 'mapbox_style'
+DASHBOARD_DIR = Path(__file__).parent
+REPO_ROOT = DASHBOARD_DIR.parent
+for path in (REPO_ROOT, DASHBOARD_DIR):
+    if str(path) not in sys.path:
+        sys.path.append(str(path))
 
-# Ensure dashboard folder is in sys.path
-dashboard_dir = Path(__file__).parent
-if str(dashboard_dir) not in sys.path:
-    sys.path.append(str(dashboard_dir))
-
-from i18n import t, get_current_lang, set_lang
-from components.landing_3d import render_3d_tarazu
-from components.unified_zoom_map import build_unified_map_html
+from auth import (  # noqa: E402
+    ROLES,
+    STATE_NAMES,
+    authenticate,
+    current_user,
+    init_auth_state,
+    login_session,
+    logout_session,
+    register_user,
+)
+from components.landing_3d import render_3d_tarazu  # noqa: E402
+from components.unified_zoom_map import build_unified_map_html  # noqa: E402
+from i18n import get_current_lang, set_lang  # noqa: E402
+from src.inference.forecast_path import build_forecast_path  # noqa: E402
 
 st.set_page_config(
     page_title="Krishi Bhav Saathi | कृषि भाव साथी",
     page_icon="🌾",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-PREDS_PATH = Path("data/deployed_test_predictions.csv")
-GEO_PATH = Path("data/raw/geography/market_master.csv")
-HIST_PATH = Path("data/processed/historical_multi_crop_sample.csv")
-LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
+DATA_DIR = Path("data")
+PREDS_PATH = DATA_DIR / "deployed_test_predictions.csv"
+GEO_PATH = DATA_DIR / "raw" / "geography" / "market_master.csv"
+HIST_PATH = DATA_DIR / "processed" / "historical_multi_crop_sample.csv"
+METRICS_PATH = DATA_DIR / "metrics_deployed.json"
 
-# Initialize Session State
-if "lang" not in st.session_state:
-    st.session_state["lang"] = "hi"
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-if "user_role" not in st.session_state:
-    st.session_state["user_role"] = None
-if "selected_crop" not in st.session_state:
-    st.session_state["selected_crop"] = "Wheat"
-if "selected_market" not in st.session_state:
-    st.session_state["selected_market"] = "Khanna"
+init_auth_state()
+st.session_state.setdefault("lang", "hi")
+st.session_state.setdefault("selected_crop", "Wheat")
+st.session_state.setdefault("selected_market", "")
 
-is_hi = (get_current_lang() == "hi")
+is_hi = get_current_lang() == "hi"
 
-# Load real dataset
-@st.cache_data
+
+def L(hi: str, en: str) -> str:
+    return hi if is_hi else en
+
+
+def rupees(value: float) -> str:
+    return f"₹{value:,.0f}"
+
+
+def pct(value: float) -> str:
+    return f"{value:+.1f}%"
+
+
+# ---------------------------------------------------------------------------
+# Shared styling
+# ---------------------------------------------------------------------------
+def inject_theme() -> None:
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Poppins:wght@400;500;600&display=swap');
+
+        :root {
+            --soil: #7c2d12;
+            --leaf: #15803d;
+            --leaf-dark: #14532d;
+            --wheat: #d97706;
+            --cream: #fffaf0;
+            --ink: #1f2937;
+            --muted: #6b7280;
+        }
+
+        .stApp {
+            background:
+                radial-gradient(1200px 600px at 10% -10%, #fef3c7 0%, transparent 55%),
+                radial-gradient(900px 500px at 95% 0%, #dcfce7 0%, transparent 50%),
+                linear-gradient(180deg, #fffdf7 0%, #fffaf0 60%, #f8faf5 100%);
+            color: var(--ink);
+        }
+
+        .main .block-container {
+            max-width: 1220px;
+            padding-top: 1.2rem;
+            padding-bottom: 3rem;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Outfit', sans-serif !important;
+            letter-spacing: -0.02em;
+        }
+
+        p, label, span, div {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .kb-brand {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 900;
+            font-size: 1.5rem;
+            color: var(--leaf-dark);
+            letter-spacing: -0.03em;
+        }
+
+        .kb-brand span { color: var(--wheat); }
+
+        .kb-kicker {
+            display: inline-block;
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .kb-hero {
+            font-family: 'Outfit', sans-serif;
+            font-size: clamp(2.4rem, 5vw, 4.2rem);
+            line-height: 1.02;
+            font-weight: 900;
+            color: #14351f;
+            margin: 14px 0 8px 0;
+            letter-spacing: -0.045em;
+        }
+
+        .kb-hero em {
+            font-style: normal;
+            color: var(--wheat);
+        }
+
+        .kb-sub {
+            font-size: 1.06rem;
+            line-height: 1.75;
+            color: #4b5563;
+            max-width: 760px;
+        }
+
+        .kb-quote {
+            border-left: 4px solid var(--wheat);
+            background: #fffbeb;
+            padding: 14px 18px;
+            border-radius: 0 14px 14px 0;
+            color: #78350f;
+            font-weight: 600;
+            margin: 18px 0;
+        }
+
+        .kb-card {
+            background: #ffffff;
+            border: 1px solid #f0e6d2;
+            border-radius: 18px;
+            padding: 20px 20px 18px 20px;
+            box-shadow: 0 8px 26px rgba(120, 53, 15, 0.05);
+            height: 100%;
+        }
+
+        .kb-card h4 {
+            margin: 0 0 6px 0;
+            font-size: 1.05rem;
+            color: #14351f;
+        }
+
+        .kb-card p {
+            color: #6b7280;
+            font-size: 0.92rem;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .kb-stat {
+            background: #ffffff;
+            border: 1px solid #f0e6d2;
+            border-radius: 16px;
+            padding: 16px 18px;
+            text-align: left;
+            box-shadow: 0 6px 18px rgba(120, 53, 15, 0.04);
+        }
+
+        .kb-stat b {
+            display: block;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.75rem;
+            color: #14532d;
+            line-height: 1.1;
+        }
+
+        .kb-stat small {
+            color: #6b7280;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .kb-step {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            background: #ffffff;
+            border: 1px solid #f0e6d2;
+            border-radius: 16px;
+            padding: 16px;
+            height: 100%;
+        }
+
+        .kb-step-num {
+            flex: 0 0 38px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: #15803d;
+            color: #ffffff;
+            display: grid;
+            place-items: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+        }
+
+        .kb-greeting {
+            background: linear-gradient(120deg, #14532d 0%, #166534 55%, #15803d 100%);
+            color: #ffffff;
+            border-radius: 20px;
+            padding: 24px 26px;
+            box-shadow: 0 14px 34px rgba(20, 83, 45, 0.18);
+        }
+
+        .kb-greeting h2 {
+            color: #ffffff;
+            margin: 0 0 4px 0;
+        }
+
+        .kb-greeting p {
+            color: #dcfce7;
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .kb-price {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            line-height: 1;
+            margin: 4px 0 6px 0;
+        }
+
+        .kb-muted { color: #6b7280; font-size: 0.86rem; }
+
+        .kb-disclaimer {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            color: #78350f;
+            border-radius: 14px;
+            padding: 12px 16px;
+            font-size: 0.82rem;
+            line-height: 1.55;
+        }
+
+        .kb-footer {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 0.78rem;
+            padding: 28px 0 8px 0;
+        }
+
+        .stButton > button[kind="primary"] {
+            background: #15803d;
+            border: 1px solid #15803d;
+            color: #ffffff;
+            border-radius: 12px;
+            font-weight: 700;
+            padding: 0.62rem 1.1rem;
+        }
+
+        .stButton > button[kind="primary"]:hover {
+            background: #166534;
+            border-color: #166534;
+        }
+
+        /* Explicit high-contrast styling for every button variant. This also
+           protects users whose OS/browser forces Streamlit into dark mode. */
+        .stButton > button,
+        .stFormSubmitButton > button,
+        [data-testid="stBaseButton-secondary"],
+        [data-testid="stBaseButton-secondaryFormSubmit"] {
+            background-color: #ffffff !important;
+            color: #14532d !important;
+            border: 1px solid #d6d3c7 !important;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .stButton > button:hover,
+        .stFormSubmitButton > button:hover,
+        [data-testid="stBaseButton-secondary"]:hover,
+        [data-testid="stBaseButton-secondaryFormSubmit"]:hover {
+            background-color: #f0fdf4 !important;
+            color: #14532d !important;
+            border-color: #86efac !important;
+        }
+
+        .stButton > button[kind="primary"],
+        .stFormSubmitButton > button[kind="primary"],
+        .stFormSubmitButton > button[data-testid="stBaseButton-primaryFormSubmit"],
+        .stButton > button[data-testid="stBaseButton-primaryFormSubmit"],
+        [data-testid="stBaseButton-primary"],
+        [data-testid="stBaseButton-primaryFormSubmit"] {
+            background-color: #15803d !important;
+            color: #ffffff !important;
+            border-color: #15803d !important;
+        }
+
+        .stButton > button[kind="primary"]:hover,
+        .stFormSubmitButton > button[kind="primary"]:hover,
+        .stFormSubmitButton > button[data-testid="stBaseButton-primaryFormSubmit"]:hover,
+        .stButton > button[data-testid="stBaseButton-primaryFormSubmit"]:hover,
+        [data-testid="stBaseButton-primary"]:hover,
+        [data-testid="stBaseButton-primaryFormSubmit"]:hover {
+            background-color: #166534 !important;
+            color: #ffffff !important;
+            border-color: #166534 !important;
+        }
+
+        /* Tabs and form controls must stay readable on the warm light canvas. */
+        [data-testid="stTabs"] [data-baseweb="tab"] {
+            color: #4b5563 !important;
+        }
+
+        [data-testid="stTabs"] [aria-selected="true"] {
+            color: #15803d !important;
+        }
+
+        [data-testid="stWidgetLabel"] p,
+        [data-testid="stWidgetLabel"] label {
+            color: #374151 !important;
+        }
+
+        [data-baseweb="input"] input,
+        [data-baseweb="textarea"] textarea,
+        [data-baseweb="select"] div {
+            color: #1f2937 !important;
+        }
+
+        .stButton > button {
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        [data-testid="stSidebar"] {
+            background: #fffdf7;
+            border-right: 1px solid #f0e6d2;
+        }
+
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border: 1px solid #f0e6d2;
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        div[data-testid="stMetricLabel"] { color: #6b7280; }
+        div[data-testid="stMetricValue"] { color: #14532d; }
+
+        .kb-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+inject_theme()
+
+
+# ---------------------------------------------------------------------------
+# Data helpers
+# ---------------------------------------------------------------------------
+@st.cache_data(show_spinner=False)
 def load_data():
     preds = pd.read_csv(PREDS_PATH) if PREDS_PATH.exists() else pd.DataFrame()
     geo = pd.read_csv(GEO_PATH) if GEO_PATH.exists() else pd.DataFrame()
     hist = pd.read_csv(HIST_PATH) if HIST_PATH.exists() else pd.DataFrame()
     return preds, geo, hist
 
-preds_df, geo_df, hist_df = load_data()
 
-# --------------------------------------------------------------------------------------
-# 1. LANDING SCREEN (MINIMAL & RELATABLE 3D TARAZU with 2 BIG OPTIONS)
-# --------------------------------------------------------------------------------------
-if not st.session_state["logged_in"]:
-    # Hide sidebar completely on landing
-    st.markdown("""
-    <style>
-        [data-testid="stSidebar"], [data-testid="stSidebarNav"], [data-testid="collapsedControl"] {
-            display: none !important;
-        }
-        .main .block-container {
-            max-width: 1050px !important;
-            padding-top: 1rem !important;
-            padding-bottom: 2rem !important;
-        }
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Poppins:wght@400;600&display=swap');
+@st.cache_data(show_spinner=False)
+def load_metrics() -> dict:
+    if not METRICS_PATH.exists():
+        return {}
+    with open(METRICS_PATH, "r", encoding="utf-8") as handle:
+        return json.load(handle)
 
-        .landing-title {
-            font-family: 'Outfit', sans-serif;
-            font-size: 2.6rem;
-            font-weight: 900;
-            text-align: center;
-            background: linear-gradient(120deg, #10b981 0%, #34d399 45%, #f59e0b 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 2px;
-        }
 
-        .landing-subtitle {
-            font-family: 'Poppins', sans-serif;
-            text-align: center;
-            font-size: 1.15rem;
-            font-weight: 600;
-            color: #94a3b8;
-            margin-bottom: 10px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+def latest_market_prices(preds: pd.DataFrame) -> pd.DataFrame:
+    if preds.empty:
+        return pd.DataFrame()
+    usable = preds.dropna(subset=["predicted_price_7d"])
+    latest = (
+        usable.sort_values("date")
+        .groupby(["state", "district", "market", "commodity"], as_index=False)
+        .last()
+    )
+    return latest
 
-    # Clean Top Nav: Title & Language Toggle
-    top_c1, top_c2 = st.columns([3, 1])
-    with top_c1:
-        st.markdown(
-            f"<div class='landing-title'>🌾 {t('app_title')}</div>"
-            f"<div class='landing-subtitle'>{'खेत से दुकान और मंडी तक — सही भाव और सही सलाह' if is_hi else 'From Farm to Mandi — Fair Price & Clear Advice'}</div>",
-            unsafe_allow_html=True
+
+def build_map_frame(preds: pd.DataFrame, geo: pd.DataFrame, crop: str) -> pd.DataFrame:
+    if preds.empty or geo.empty:
+        return pd.DataFrame()
+    latest = latest_market_prices(preds)
+    latest = latest[latest["commodity"] == crop]
+    if latest.empty:
+        return pd.DataFrame()
+    merged = geo.merge(
+        latest,
+        left_on=["state", "district", "market_name"],
+        right_on=["state", "district", "market"],
+        how="inner",
+    )
+    if merged.empty:
+        slim = latest.drop(columns=["state", "district"], errors="ignore")
+        merged = geo.merge(
+            slim,
+            left_on="market_name",
+            right_on="market",
+            how="inner",
+            suffixes=("", "_pred"),
         )
-    with top_c2:
-        lang_toggle = st.radio(
+    if merged.empty:
+        return merged
+    merged = merged.drop_duplicates(subset=["state", "district", "market_name"])
+    merged["predicted_price_7d"] = merged["predicted_price_7d"].fillna(merged["modal_price"])
+    merged["price_diff"] = merged["predicted_price_7d"] - merged["modal_price"]
+    merged["price_pct"] = np.where(
+        merged["modal_price"] > 0,
+        merged["price_diff"] / merged["modal_price"] * 100,
+        0.0,
+    )
+    merged["recommendation"] = np.where(
+        merged["price_pct"] >= 1.5,
+        "🟢 रोकें / Hold",
+        np.where(merged["price_pct"] <= -1.5, "🔴 बेचें / Sell", "🔵 स्थिर / Stable"),
+    )
+    return merged
+
+
+def nav_to(view: str, role: str | None = None) -> None:
+    st.session_state["auth_view"] = view
+    if view in {"login", "signup"}:
+        st.session_state["auth_mode"] = view
+    if role:
+        st.session_state["pending_role"] = role
+    st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# 1. LANDING
+# ---------------------------------------------------------------------------
+def render_top_bar() -> None:
+    left, right = st.columns([3, 1.2])
+    with left:
+        st.markdown(
+            "<div class='kb-brand'>🌾 Krishi Bhav <span>Saathi</span></div>"
+            "<div class='kb-muted'>कृषि भाव साथी · आपकी मेहनत, सही दाम</div>",
+            unsafe_allow_html=True,
+        )
+    with right:
+        choice = st.radio(
             "भाषा / Language",
-            ["हिन्दी (Hindi)", "English"],
+            ["हिन्दी", "English"],
             index=0 if is_hi else 1,
             horizontal=True,
-            key="minimal_lang_toggle"
+            key="top_lang",
+            label_visibility="collapsed",
         )
-        new_lang = "hi" if "हिन्दी" in lang_toggle else "en"
+        new_lang = "hi" if choice == "हिन्दी" else "en"
         if new_lang != get_current_lang():
             set_lang(new_lang)
             st.rerun()
 
-    # 3D Relatable Mandi Tarazu (Weighing Scale) Animation
-    tarazu_html = render_3d_tarazu(is_hi=is_hi, app_title=t('app_title'))
-    st_components.html(tarazu_html, height=360, scrolling=False)
 
-    st.markdown("<p style='text-align: center; font-size: 1.25rem; font-weight: 700; color: #f8fafc; margin: 15px 0 10px 0;'>"
-                + ("👇 कृपया अपनी श्रेणी चुनें (Choose Your Category):" if is_hi else "👇 Please Choose Your Portal:")
-                + "</p>", unsafe_allow_html=True)
-
-    # EXACTLY 2 BIG TOUCH OPTIONS
-    col_farmer, col_researcher = st.columns(2)
-
-    with col_farmer:
-        with st.container(border=True):
-            st.markdown(
-                "## 👨‍🌾 " + ("किसान, दुकानदार व ग्रामीण व्यापारी" if is_hi else "Farmer, Shopkeeper & Local Vendor") + "\n"
-                + ("**बिल्कुल आसान — भारत का मंडी नक्शा व सीधी सलाह:**\n\n"
-                   "• पूरे भारत का लाइव नक्शा (राज्य ➔ जिला ➔ शहर ➔ मंडी)\n"
-                   "• आज का ताजा भाव और 7 दिन बाद की सीधी सलाह (रुकें 🟢 या बेचें 🔴)\n"
-                   "• पास की किस मंडी में सबसे ज्यादा पैसा मिलेगा\n"
-                   "*कोई कठिन गणित नहीं — सीधे मोबाइल पर काम की बातें।* "
-                   if is_hi else
-                   "**Simple, Mobile-Friendly & Minimal:**\n\n"
-                   "• Interactive India Map (State ➔ District ➔ City ➔ Mandi)\n"
-                   "• Today's live market rate & 7-day Hold 🟢 / Sell 🔴 advice\n"
-                   "• Nearby highest-paying mandi profit alert\n"
-                   "*Zero academic jargon — designed for quick decisions on mobile.*")
-            )
-            if st.button(
-                "🚀 " + ("किसान व व्यापारी पोर्टल में प्रवेश करें" if is_hi else "Enter Farmer / Vendor Portal"),
-                key="btn_enter_farmer",
-                use_container_width=True,
-                type="primary"
-            ):
-                st.session_state["logged_in"] = True
-                st.session_state["user_role"] = "Farmer/Vendor"
-                st.rerun()
-
-    with col_researcher:
-        with st.container(border=True):
-            st.markdown(
-                "## 🔬 " + ("शोधकर्ता, वैज्ञानिक एवं अधिकारी" if is_hi else "Researcher, Analyst & Officer") + "\n"
-                + ("**गहन तकनीकी विश्लेषण एवं मॉडल:**\n\n"
-                   "• 2,515 मंडियों का संपूर्ण डेटासेट व मॉडल बेंचमार्क\n"
-                   "• GraphSAGE ग्राफ न्यूरल नेटवर्क व एब्लेशन स्टडीज\n"
-                   "• 48-फ़ीचर Tree-SHAP व 10 साल के नासा मौसम आंकड़े\n"
-                   "*अनुसंधान, नीति निर्धारण व मॉडल ऑडिट के लिए।* "
-                   if is_hi else
-                   "**Advanced Research & Modeling Suite:**\n\n"
-                   "• 2,515 APMCs nationwide dataset & benchmark leaderboards\n"
-                   "• GraphSAGE Spatial GNN & empirical ablation studies\n"
-                   "• 48-feature Tree-SHAP and 10-year NASA weather correlations\n"
-                   "*For policy analysts, economists, and researchers.*")
-            )
-            if st.button(
-                "📊 " + ("रिसर्च व एनालिटिक्स सूट में प्रवेश करें" if is_hi else "Enter Full Research Suite"),
-                key="btn_enter_researcher",
-                use_container_width=True
-            ):
-                st.session_state["logged_in"] = True
-                st.session_state["user_role"] = "Researcher"
-                st.rerun()
-
-# --------------------------------------------------------------------------------------
-# 2. OPTION A: FARMER & VENDOR PORTAL (WITH INTERACTIVE INDIA MAP & HIERARCHY)
-# --------------------------------------------------------------------------------------
-elif st.session_state.get("user_role") == "Farmer/Vendor":
-    # Hide complex sidebar navigation
-    st.markdown("""
-    <style>
-        [data-testid="stSidebar"], [data-testid="stSidebarNav"], [data-testid="collapsedControl"] {
-            display: none !important;
-        }
-        .main .block-container {
-            max-width: 1200px !important;
-            padding-top: 1rem !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Top Header & Exit Button
-    f_top1, f_top2 = st.columns([3, 1])
-    with f_top1:
-        st.markdown("### 🌾 " + ("अन्नदाता किसान व ग्रामीण व्यापारी साथी — लाइव मंडी भाव नक्शा" if is_hi else "Farmer & Village Vendor Assistant — Live Mandi Map"))
-    with f_top2:
-        if st.button("🚪 " + ("बाहर निकलें (Logout)" if is_hi else "Exit Portal"), use_container_width=True):
-            st.session_state["logged_in"] = False
-            st.session_state["user_role"] = None
-            st.rerun()
-
-    st.markdown("---")
-
-    # ----------------------------------------------------------------------------------
-    # HIERARCHICAL LOCATION SELECTORS: CROP -> STATE -> DISTRICT -> MANDI
-    # ----------------------------------------------------------------------------------
-    st.markdown("#### 📍 " + ("अपनी फसल और क्षेत्र चुनें (Select Crop & Location):" if is_hi else "Select Crop & Location:"))
-    
-    sel_c1, sel_c2, sel_c3, sel_c4 = st.columns(4)
-    
-    # 1. CROP SELECTION
-    all_crops = sorted(preds_df['commodity'].dropna().unique().tolist()) if not preds_df.empty else ["Wheat", "Rice", "Maize"]
-    def_crop_idx = all_crops.index("Wheat") if "Wheat" in all_crops else 0
-    with sel_c1:
-        active_crop = st.selectbox(
-            "1. " + ("फसल चुनें (Crop)" if is_hi else "Select Crop"),
-            all_crops,
-            index=def_crop_idx
-        )
-        st.session_state["selected_crop"] = active_crop
-
-    # Prepare merged master geography dataset for active crop across 27+ states
-    crop_preds = preds_df[preds_df['commodity'] == active_crop] if not preds_df.empty else pd.DataFrame()
-    crop_hist = hist_df[hist_df['commodity'] == active_crop] if not hist_df.empty else pd.DataFrame()
-
-    hist_latest = crop_hist.sort_values('date').groupby(['state', 'district', 'market']).last().reset_index() if not crop_hist.empty else pd.DataFrame()
-    preds_latest = crop_preds.sort_values('date').groupby(['state', 'district', 'market']).last().reset_index() if not crop_preds.empty else pd.DataFrame()
-
-    combined_prices = pd.concat([
-        hist_latest[['state', 'district', 'market', 'modal_price']].assign(src='hist') if not hist_latest.empty else pd.DataFrame(),
-        preds_latest[['state', 'district', 'market', 'modal_price', 'predicted_price_7d']].assign(src='preds') if not preds_latest.empty else pd.DataFrame()
-    ], ignore_index=True)
-
-    if not combined_prices.empty and not geo_df.empty:
-        combined_prices = combined_prices.sort_values('src', ascending=False).drop_duplicates(subset=['state', 'district', 'market'], keep='first')
-        merged_geo = pd.merge(
-            geo_df,
-            combined_prices,
-            left_on=['state', 'district', 'market_name'],
-            right_on=['state', 'district', 'market'],
-            how='inner'
-        )
-        if merged_geo.empty:
-            merged_geo = pd.merge(
-                geo_df,
-                combined_prices,
-                left_on='market_name',
-                right_on='market',
-                how='inner'
-            )
-        
-        merged_geo['predicted_price_7d'] = merged_geo['predicted_price_7d'].fillna(merged_geo['modal_price']).round(0)
-        merged_geo['price_diff'] = merged_geo['predicted_price_7d'] - merged_geo['modal_price']
-        merged_geo['price_pct'] = ((merged_geo['price_diff'] / merged_geo['modal_price']) * 100).round(1)
-        merged_geo['recommendation'] = np.where(merged_geo['price_pct'] >= 2.0, "🟢 माल रोकें (Hold)", np.where(merged_geo['price_pct'] <= -2.0, "🔴 आज बेचें (Sell)", "🔵 स्थिर (Stable)"))
-    else:
-        merged_geo = pd.DataFrame()
-
-    # 2. STATE SELECTION
-    all_states_label = "🇮🇳 पूरे भारत के राज्य (All States)" if is_hi else "🇮🇳 All Indian States"
-    available_states = [all_states_label] + sorted(merged_geo['state'].dropna().unique().tolist()) if not merged_geo.empty else [all_states_label]
-    
-    with sel_c2:
-        def_st_idx = 0
-        prev_st = st.session_state.get("selected_state")
-        if prev_st and prev_st in available_states:
-            def_st_idx = available_states.index(prev_st)
-            
-        active_state = st.selectbox(
-            "2. " + ("राज्य चुनें (State)" if is_hi else "Select State"),
-            available_states,
-            index=def_st_idx
-        )
-        st.session_state["selected_state"] = active_state
-
-    # 3. DISTRICT SELECTION
-    all_districts_label = "📍 सभी जिले (All Districts)" if is_hi else "📍 All Districts in State"
-    if active_state != all_states_label:
-        state_subset = merged_geo[merged_geo['state'] == active_state]
-        available_districts = [all_districts_label] + sorted(state_subset['district'].dropna().unique().tolist())
-    else:
-        state_subset = merged_geo
-        available_districts = [all_districts_label] + sorted(merged_geo['district'].dropna().unique().tolist())
-
-    with sel_c3:
-        def_dist_idx = 0
-        prev_dist = st.session_state.get("selected_district")
-        if prev_dist and prev_dist in available_districts:
-            def_dist_idx = available_districts.index(prev_dist)
-            
-        active_district = st.selectbox(
-            "3. " + ("जिला चुनें (District)" if is_hi else "Select District"),
-            available_districts,
-            index=def_dist_idx
-        )
-        st.session_state["selected_district"] = active_district
-
-    # 4. MANDI / CITY SELECTION
-    if active_district != all_districts_label:
-        dist_subset = state_subset[state_subset['district'] == active_district]
-        available_mandis = sorted(dist_subset['market_name'].dropna().unique().tolist())
-    else:
-        dist_subset = state_subset
-        available_mandis = sorted(state_subset['market_name'].dropna().unique().tolist())
-
-    if not available_mandis:
-        available_mandis = sorted(merged_geo['market_name'].dropna().unique().tolist()) if not merged_geo.empty else ["Khanna"]
-
-    with sel_c4:
-        def_mandi_idx = 0
-        prev_mkt = st.session_state.get("selected_market")
-        if prev_mkt and prev_mkt in available_mandis:
-            def_mandi_idx = available_mandis.index(prev_mkt)
-
-        active_mandi = st.selectbox(
-            "4. " + ("मंडी / शहर (City / Mandi)" if is_hi else "Select City / Mandi"),
-            available_mandis,
-            index=def_mandi_idx
-        )
-        st.session_state["selected_market"] = active_mandi
-
-    st.markdown("---")
-
-    # ----------------------------------------------------------------------------------
-    # SINGLE UNIFIED INTERACTIVE INDIA MAP WITH SEAMLESS ZOOM DISTRIBUTION
-    # ----------------------------------------------------------------------------------
-    st.markdown("### 🗺️ " + ("भारत का लाइव मंडी भाव वितरण नक्शा" if is_hi else "Interactive India Mandi Price Distribution Map"))
-    st.caption(
-        "🗺️ नक्शे पर ज़ूम करें (स्क्रॉल या पिंच) — राज्यवार ➡️ जिलावार ➡️ स्थानीय मंडी स्तर का भाव वितरण अपने आप दिखेगा:"
-        if is_hi else
-        "🗺️ Zoom the map (scroll or pinch) — seamlessly reveals State ➡️ District ➡️ Mandi price distribution:"
+def render_landing() -> None:
+    st.markdown(
+        "<style>[data-testid='stSidebar'], [data-testid='stSidebarNav'], "
+        "[data-testid='collapsedControl'] {display:none !important;}</style>",
+        unsafe_allow_html=True,
     )
+    render_top_bar()
 
-    map_html = build_unified_map_html(
-        crop_name=active_crop,
-        merged_geo=merged_geo,
-        is_hi=is_hi,
-        selected_state=active_state if active_state != all_states_label else None,
-        selected_district=active_district if active_district != all_districts_label else None,
-        selected_mandi=active_mandi
-    )
+    left, right = st.columns([1.35, 1], gap="large")
+    with left:
+        st.markdown(
+            f"<span class='kb-kicker'>{L('भारत के किसानों, दुकानदारों और व्यापारियों के लिए', 'For India’s farmers, shopkeepers & vendors')}</span>"
+            f"<div class='kb-hero'>{L('आपकी मेहनत का<br><em>सही दाम।</em>', 'The right price<br>for your <em>hard work.</em>')}</div>"
+            "<p class='kb-sub'>"
+            + L(
+                "सुबह के अंधेरे में खेत जाने वाले किसान से लेकर गाँव की छोटी दुकान चलाने वाले भाई-बहन तक — "
+                "हर किसी के लिए सीधी, आसान और भरोसेमंद मंडी सलाह। बस अपनी फसल चुनिए और जानिए: "
+                "<b>आज बेचें या थोड़ा रुकें?</b>",
+                "From the farmer who reaches the field before sunrise to the family running a small village shop — "
+                "clear, simple and trustworthy mandi guidance. Choose your crop and know: "
+                "<b>sell today, or wait a little?</b>",
+            )
+            + "</p>"
+            "<div class='kb-quote'>"
+            + L(
+                "“मेहनत आपकी, सलाह हमारी — फैसला आपका।”",
+                "“Your hard work, our guidance — the decision is always yours.”",
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
 
-    st_components.html(map_html, height=620)
+        cta1, cta2, cta3 = st.columns([1.15, 1, 0.9])
+        with cta1:
+            if st.button(L("🌱 मुफ़्त खाता बनाएं", "🌱 Create free account"), type="primary", use_container_width=True):
+                nav_to("signup", "Farmer")
+        with cta2:
+            if st.button(L("🔐 पहले से खाता है", "🔐 I already have an account"), use_container_width=True):
+                nav_to("login")
+        with cta3:
+            if st.button(L("🔬 शोधकर्ता पोर्टल", "🔬 Research portal"), use_container_width=True):
+                nav_to("signup", "Researcher / Officer")
 
-    # ----------------------------------------------------------------------------------
-    # THE 4 BIG TOUCH CARDS FOR THE SELECTED MANDI
-    # ----------------------------------------------------------------------------------
-    st.markdown("---")
-    
-    # Extract details of chosen mandi
-    chosen_record = merged_geo[merged_geo['market_name'] == active_mandi]
-    if chosen_record.empty and not merged_geo.empty:
-        chosen_record = merged_geo.iloc[0:1]
-    
-    active_district = str(chosen_record['district'].iloc[0]) if not chosen_record.empty else ""
-    active_state = str(chosen_record['state'].iloc[0]) if not chosen_record.empty else ""
-    today_price = round(float(chosen_record['modal_price'].iloc[0]), 0) if not chosen_record.empty else 2000.0
-    pred_7d = round(float(chosen_record['predicted_price_7d'].iloc[0]), 0) if not chosen_record.empty else 2100.0
-    diff_price = round(pred_7d - today_price, 0)
-    pct_change = round((diff_price / today_price) * 100, 1) if today_price > 0 else 0
-    trolley_money = round(abs(diff_price) * 50, 0)  # 50 quintal trolley
-    
-    st.subheader(f"🌾 **{active_crop}** @ **{active_mandi}** ({active_district}, {active_state})")
+        st.caption(
+            L(
+                "कोई शुल्क नहीं · हिन्दी और English · मोबाइल पर आसान",
+                "No fees · Hindi & English · designed for mobile",
+            )
+        )
 
-    k_c1, k_c2 = st.columns(2)
-    with k_c1:
-        with st.container(border=True):
-            st.markdown("### 💰 " + ("आज का मंडी भाव" if is_hi else "Today's Mandi Price"))
-            st.markdown(f"<h1 style='color:#38bdf8; font-size:3.2rem; margin:0;'>₹ {today_price:,.0f}</h1>", unsafe_allow_html=True)
-            st.caption("प्रति क्विंटल (Per Quintal)")
-
-    with k_c2:
-        with st.container(border=True):
-            st.markdown("### 🔮 " + ("7 दिन बाद का अनुमानित भाव" if is_hi else "7-Day Expected Price"))
-            price_color = "#34d399" if diff_price >= 0 else "#f87171"
-            st.markdown(f"<h1 style='color:{price_color}; font-size:3.2rem; margin:0;'>₹ {pred_7d:,.0f}</h1>", unsafe_allow_html=True)
-            sign = "+" if diff_price >= 0 else ""
-            st.caption(f"{sign}₹ {diff_price:,.0f} ({sign}{pct_change}%) संभावित बदलाव")
+    with right:
+        st_components.html(
+            render_3d_tarazu(is_hi=is_hi, app_title="कृषि भाव साथी" if is_hi else "Krishi Bhav Saathi"),
+            height=330,
+            scrolling=False,
+        )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # CARD 3: CLEAR ACTIONABLE ADVICE (HOLD OR SELL)
+    metrics = load_metrics()
+    geo = pd.read_csv(GEO_PATH) if GEO_PATH.exists() else pd.DataFrame()
+    mandis = len(geo) if not geo.empty else 2515
+    states = geo["state"].nunique() if not geo.empty else 31
+    by_h = metrics.get("by_horizon", {})
+    cov = metrics.get("mondrian_averages", {}).get("7-Day", {}).get("macro_coverage")
+    s1, s2, s3, s4 = st.columns(4)
+    for col, value, label in [
+        (s1, f"{mandis:,}", L("मैप किए गए APMC मंडी", "mapped APMC mandis")),
+        (s2, f"{states}", L("राज्य और केंद्र शासित प्रदेश", "states & UTs")),
+        (s3, "11", L("प्रमुख फसलें", "major crops")),
+        (s4, f"{cov:.1f}%" if cov else "95%+", L("7-दिन का भरोसा (95% बैंड)", "7-day 95% coverage")),
+    ]:
+        with col:
+            st.markdown(f"<div class='kb-stat'><b>{value}</b><small>{label}</small></div>", unsafe_allow_html=True)
+
+    st.markdown("<br><h3 style='color:#14351f;'>" + L("किसान से दुकान तक — सबके लिए", "Built for every hand in the chain") + "</h3>", unsafe_allow_html=True)
+
+    p1, p2, p3 = st.columns(3, gap="large")
+    personas = [
+        (
+            "👨‍🌾",
+            L("किसान भाई-बहन", "Farmers"),
+            L("मंडी में जाने से पहले जानें कि भाव ऊपर जाएगा या नीचे। 7 दिन रुकने पर कितना फायदा — सीधे रुपये में।", "Know whether prices will rise or fall before you load the trolley. See the rupee impact of waiting 7 days."),
+            "Farmer",
+        ),
+        (
+            "🏪",
+            L("छोटे दुकानदार और विक्रेता", "Shopkeepers & vendors"),
+            L("सही समय पर माल खरीदें, अपनी लागत बचाएं और ग्राहकों को सही दाम दें।", "Buy stock at the right time, protect your margin, and serve customers fairly."),
+            "Shopkeeper / Vendor",
+        ),
+        (
+            "🚚",
+            L("व्यापारी और आढ़ती", "Traders & commission agents"),
+            L("पास की किस मंडी में बेहतर भाव है, और आने-जाने का खर्च निकालकर कितना बचेगा।", "See which nearby mandi pays more — after freight — and plan your dispatch."),
+            "Trader / Commission Agent",
+        ),
+    ]
+    for column, (icon, title, body, role) in zip((p1, p2, p3), personas):
+        with column:
+            st.markdown(
+                f"<div class='kb-card'><div style='font-size:2rem;'>{icon}</div>"
+                f"<h4>{title}</h4><p>{body}</p></div>",
+                unsafe_allow_html=True,
+            )
+            if st.button(L("इस पोर्टल से शुरू करें →", "Start this portal →"), key=f"persona_{role}", use_container_width=True):
+                nav_to("signup", role)
+
+    st.markdown("<br><h3 style='color:#14351f;'>" + L("तीन आसान कदम", "Three simple steps") + "</h3>", unsafe_allow_html=True)
+    st1, st2, st3 = st.columns(3, gap="large")
+    steps = [
+        (L("अपनी फसल चुनें", "Choose your crop"), L("गेहूँ, धान, मक्का, दालें — जो आप उगाते हैं।", "Wheat, rice, maize, pulses — whatever you grow.")),
+        (L("अपनी मंडी चुनें", "Pick your mandi"), L("राज्य, जिला और मंडी — या पास की सबसे अच्छी मंडी देखें।", "State, district and mandi — or find the best one nearby.")),
+        (L("सीधी सलाह पाएं", "Get a clear answer"), L("आज बेचें, रुकें, या स्थिर — 95% भरोसे के दायरे के साथ।", "Sell, hold, or stable — with a 95% confidence range.")),
+    ]
+    for column, number, (title, body) in zip((st1, st2, st3), ("1", "2", "3"), steps):
+        with column:
+            st.markdown(
+                f"<div class='kb-step'><div class='kb-step-num'>{number}</div><div><h4>{title}</h4><p class='kb-muted'>{body}</p></div></div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
     with st.container(border=True):
-        st.markdown("## 💡 " + ("सीधी किसान सलाह (What Should You Do?)" if is_hi else "Direct Action Advice"))
-        if diff_price >= 50:
-            st.success(
-                "### 🟢 " + ("माल अभी न बेचें — 7 दिन रोकें (HOLD PRODUCE)!" if is_hi else "HOLD PRODUCE — Prices Expected to Rise!") + "\n\n"
-                + (f"• **फायदा:** 7 दिन रुकने पर लगभग **₹{diff_price:,.0f} प्रति क्विंटल ज्यादा** मिलने का अनुमान है।\n\n"
-                   f"• **1 ट्रैक्टर ट्रॉली (50 क्विंटल) पर अतिरिक्त मुनाफा:** लगभग **+₹{trolley_money:,.0f} की बचत** होगी!\n\n"
-                   f"• यदि आपके पास सुरक्षित गोदाम या तिरपाल है, तो अभी माल न निकालें।"
-                   if is_hi else
-                   f"• **Benefit:** Prices projected to rise by **+₹{diff_price:,.0f} per quintal** over the next 7 days.\n\n"
-                   f"• **Extra Net Margin on 1 Trolley (50 qtl):** Approx **+₹{trolley_money:,.0f} more revenue**!\n\n"
-                   f"• If you have covered storage, holding stock will maximize your returns.")
-            )
-        elif diff_price <= -50:
-            st.error(
-                "### 🔴 " + ("आज ही बेचें — भाव गिरने का खतरा है (SELL TODAY)!" if is_hi else "SELL TODAY — Prices Expected to Drop!") + "\n\n"
-                + (f"• **सावधानी:** 7 दिन में भाव लगभग **₹{abs(diff_price):,.0f} प्रति क्विंटल नीचे आ सकता है**।\n\n"
-                   f"• **1 ट्रैक्टर ट्रॉली (50 क्विंटल) पर संभावित नुकसान:** लगभग **-₹{trolley_money:,.0f} का घाटा** हो सकता है।\n\n"
-                   f"• नुकसान से बचने के लिए नजदीकी मंडी में आज या कल ही माल निकाल दें।"
-                   if is_hi else
-                   f"• **Caution:** Prices projected to fall by **-₹{abs(diff_price):,.0f} per quintal** over 7 days.\n\n"
-                   f"• **Potential Loss on 1 Trolley (50 qtl):** Approx **-₹{trolley_money:,.0f} in lost earnings**.\n\n"
-                   f"• Selling immediately protects your operational margin.")
-            )
-        else:
-            st.info(
-                "### 🔵 " + ("भाव स्थिर रहेगा — अपनी सुविधानुसार बेचें (PRICE STABLE)" if is_hi else "PRICE STABLE — Steady Market") + "\n\n"
-                + ("भाव में कोई बड़ा फेरबदल नहीं होने वाला। आप अपनी जरूरत और सुविधा अनुसार कभी भी माल बेच सकते हैं।"
-                   if is_hi else
-                   "Prices are steady with normal equilibrium. Transact comfortably as per your cash needs.")
-            )
-
-    # CARD 4: NEARBY HIGHEST PAYING MANDI ALERT
-    competing_mandis = merged_geo[(merged_geo['state'] == active_state) & (merged_geo['market_name'] != active_mandi)]
-    if not competing_mandis.empty:
-        best_other = competing_mandis.loc[competing_mandis['modal_price'].idxmax()]
-        best_name = best_other['market_name']
-        best_dist = best_other['district']
-        best_p = round(float(best_other['modal_price']), 0)
-        p_spread = best_p - today_price
-
-        if p_spread > 50:
-            extra_trolley = p_spread * 50
-            st.markdown("<br>", unsafe_allow_html=True)
-            with st.container(border=True):
-                st.markdown("## 🚜 " + ("पास की मंडी का बड़ा मुनाफा (Nearby Mandi Alert)" if is_hi else "Nearby Mandi Profit Alert"))
-                st.warning(
-                    f"📍 **" + (f"पास की मंडी '{best_name}' ({best_dist}) में आज का भाव: ₹{best_p:,.0f} / क्विंटल" if is_hi else f"Nearby Mandi '{best_name}' ({best_dist}) offers ₹{best_p:,.0f} / quintal") + f"**\n\n"
-                    + (f"• आपकी वर्तमान मंडी ({active_mandi}) से **₹{p_spread:,.0f} प्रति क्विंटल ज्यादा** भाव मिल रहा है!\n\n"
-                       f"• वहां 1 ट्रॉली (50 क्विंटल) ले जाने पर **₹{extra_trolley:,.0f} का अतिरिक्त शुद्ध मुनाफा** होगा (डीजल खर्च निकालने के बाद भी बड़ी बचत)।"
-                       if is_hi else
-                       f"• Mandi '{best_name}' is paying **₹{p_spread:,.0f} / quintal higher** than {active_mandi}!\n\n"
-                       f"• Driving 1 trolley (50 qtl) there yields **+₹{extra_trolley:,.0f} extra net cash**.")
+        c1, c2 = st.columns([2.2, 1])
+        with c1:
+            st.markdown(
+                "<h3 style='margin-bottom:4px;color:#14351f;'>"
+                + L("एक किसान की सुबह, एक छोटी दुकान की उम्मीद", "A farmer’s morning, a small shop’s hope")
+                + "</h3><p class='kb-sub' style='margin:0;'>"
+                + L(
+                    "रमेश जी हर सुबह 4 बजे उठते हैं। पहले उन्हें अंदाज़ा था कि मंडी में आज भाव क्या होगा — "
+                    "अब वे फसल काटने से पहले देख लेते हैं कि 7 दिन बाद भाव किधर जा रहा है। "
+                    "और सुनीता दीदी, जो गाँव में छोटी दुकान चलाती हैं, पहले ही जान जाती हैं कि माल कब सस्ता होगा। "
+                    "<b>यही छोटी-सी जानकारी, बड़ा फर्क लाती है।</b>",
+                    "Ramesh wakes at 4 a.m. He used to guess what the mandi would pay. Now, before harvest, he can see where the 7-day price is heading. "
+                    "And Sunita, who runs a small village shop, knows when stock will be cheaper. "
+                    "<b>That small piece of knowledge makes a big difference.</b>",
                 )
+                + "</p>",
+                unsafe_allow_html=True,
+            )
+        with c2:
+            if st.button(L("अपनी सलाह देखें →", "See your guidance →"), type="primary", use_container_width=True):
+                nav_to("signup", "Farmer")
+            st.markdown("<div class='kb-muted' style='margin-top:8px;'>" + L("2 मिनट में शुरू करें", "Set up in 2 minutes") + "</div>", unsafe_allow_html=True)
 
-# --------------------------------------------------------------------------------------
-# 3. OPTION B: RESEARCHER & ANALYST PORTAL (FULL 9 PAGES ACTIVE)
-# --------------------------------------------------------------------------------------
-else:
-    # Researcher mode: Show sidebar with all 9 pages!
-    st.sidebar.markdown(f"### 🔬 " + ("शोधकर्ता एनालिटिक्स" if is_hi else "Research Suite"))
-    st.sidebar.info("भूमिका: विशेषज्ञ / शोधकर्ता (Researcher Mode Active)")
-    
-    r_top1, r_top2 = st.columns([3, 1])
-    with r_top1:
-        st.title("🔬 " + ("कृषि अनुसंधान व मॉडल एनालिटिक्स सूट" if is_hi else "Agricultural Intelligence & Modeling Suite"))
-        st.markdown("Production forecasting across **2,515 Mandis**, **11 Commodities**, **GraphSAGE Spatial Neural Networks**, and **NASA Weather**.")
-    with r_top2:
-        if st.button("🚪 " + ("मुख्य स्क्रीन पर जाएं" if is_hi else "Exit to Landing"), use_container_width=True):
-            st.session_state["logged_in"] = False
-            st.session_state["user_role"] = None
+    st.markdown(
+        "<div class='kb-disclaimer' style='margin-top:26px;'>"
+        + L(
+            "⚠️ <b>पारदर्शिता:</b> यह डेमो अक्टूबर 2016 – जून 2017 के Agmarknet ऐतिहासिक डेटा पर बना है। "
+            "यह लाइव मंडी भाव नहीं है। सलाह 95% कॉन्फ़ॉर्मल बैंड पर आधारित है, भविष्य की गारंटी नहीं।",
+            "⚠️ <b>Transparency:</b> This demo uses historical Agmarknet data from Oct 2016 – Jun 2017. "
+            "It is not a live market feed. Guidance is based on a 95% conformal band, not a guarantee of future prices.",
+        )
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div class='kb-footer'>" + L("बनाया गया भारत के किसानों, दुकानदारों और व्यापारियों के लिए · 🌾", "Built for India’s farmers, shopkeepers and traders · 🌾") + "</div>", unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# 2. LOGIN / SIGN-UP
+# ---------------------------------------------------------------------------
+def render_auth(view: str) -> None:
+    st.markdown(
+        "<style>[data-testid='stSidebar'], [data-testid='stSidebarNav'], "
+        "[data-testid='collapsedControl'] {display:none !important;}</style>",
+        unsafe_allow_html=True,
+    )
+    render_top_bar()
+
+    if st.button(L("← मुख्य पृष्ठ पर लौटें", "← Back to home")):
+        nav_to("landing")
+
+    st.markdown(
+        f"<div style='text-align:center;margin:6px 0 18px 0;'>"
+        f"<h1 style='color:#14351f;margin-bottom:2px;'>{L('आपका स्वागत है 🌾', 'Welcome 🌾')}</h1>"
+        f"<p class='kb-muted'>{L('अपने खाते में प्रवेश करें या नया खाता बनाएं।', 'Sign in or create your free account.')}</p>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    _, center, _ = st.columns([1, 1.25, 1])
+    with center:
+        if "auth_mode" not in st.session_state:
+            st.session_state["auth_mode"] = "login" if view == "login" else "signup"
+        mode = st.radio(
+            "auth_mode",
+            ["login", "signup"],
+            format_func=lambda value: L("🔐 लॉगिन", "🔐 Log in")
+            if value == "login"
+            else L("🌱 नया खाता", "🌱 Sign up"),
+            horizontal=True,
+            label_visibility="collapsed",
+            key="auth_mode",
+        )
+        if mode == "login":
+            render_login_form()
+        else:
+            render_signup_form()
+
+
+def render_login_form() -> None:
+    with st.form("login_form", border=False):
+        phone = st.text_input(L("मोबाइल नंबर", "Mobile number"), placeholder="9999999999")
+        password = st.text_input(L("पासवर्ड", "Password"), type="password")
+        submitted = st.form_submit_button(L("लॉगिन करें", "Log in"), type="primary", use_container_width=True)
+    if submitted:
+        user = authenticate(phone, password)
+        if user:
+            login_session(user)
+            st.rerun()
+        else:
+            st.error(L("मोबाइल नंबर या पासवर्ड सही नहीं है।", "Mobile number or password is incorrect."))
+
+    with st.expander(L("डेमो खाते से देखें", "Try a demo account")):
+        st.markdown(
+            L(
+                "**किसान डेमो:** `9999999999` / `kisan1234`  \n"
+                "**दुकानदार डेमो:** `8888888888` / `vyapari1234`",
+                "**Farmer demo:** `9999999999` / `kisan1234`  \n"
+                "**Shopkeeper demo:** `8888888888` / `vyapari1234`",
+            )
+        )
+        if st.button(L("किसान डेमो में प्रवेश करें", "Enter farmer demo"), use_container_width=True):
+            user = authenticate("9999999999", "kisan1234")
+            if user:
+                login_session(user)
+                st.rerun()
+
+
+def render_signup_form() -> None:
+    role_options = ROLES
+    pending = st.session_state.get("pending_role", "Farmer")
+    default_role = role_options.index(pending) if pending in role_options else 0
+
+    with st.form("signup_form", border=False):
+        name = st.text_input(L("आपका नाम", "Your name"), placeholder=L("जैसे: रमेश पाटिल", "e.g. Ramesh Patil"))
+        phone = st.text_input(L("मोबाइल नंबर (10 अंक)", "Mobile number (10 digits)"), placeholder="9876543210")
+        c1, c2 = st.columns(2)
+        with c1:
+            password = st.text_input(L("पासवर्ड", "Password"), type="password", help=L("कम से कम 6 अक्षर", "At least 6 characters"))
+        with c2:
+            confirm = st.text_input(L("पासवर्ड दोबारा", "Confirm password"), type="password")
+
+        role = st.selectbox(L("आप कौन हैं?", "Who are you?"), role_options, index=default_role)
+        c3, c4 = st.columns(2)
+        with c3:
+            state = st.selectbox(L("राज्य", "State"), ["— " + L("चुनें", "select") + " —"] + STATE_NAMES)
+        with c4:
+            district = st.text_input(L("जिला (वैकल्पिक)", "District (optional)"), placeholder=L("जैसे: नासिक", "e.g. Nashik"))
+        language = st.radio(
+            L("पसंदीदा भाषा", "Preferred language"),
+            ["हिन्दी", "English"],
+            index=0 if is_hi else 1,
+            horizontal=True,
+        )
+        agree = st.checkbox(
+            L(
+                "मैं समझता/समझती हूँ कि यह डेमो ऐतिहासिक डेटा पर आधारित है, लाइव भाव नहीं।",
+                "I understand this demo uses historical data, not live prices.",
+            )
+        )
+        submitted = st.form_submit_button(L("खाता बनाएं और शुरू करें", "Create account & start"), type="primary", use_container_width=True)
+
+    if submitted:
+        if not agree:
+            st.error(L("कृपया पहले पारदर्शिता वाली बात स्वीकार करें।", "Please accept the transparency note first."))
+            return
+        if password != confirm:
+            st.error(L("दोनों पासवर्ड एक जैसे नहीं हैं।", "The two passwords do not match."))
+            return
+        try:
+            user = register_user(
+                name=name,
+                phone=phone,
+                password=password,
+                role=role,
+                state="" if state.startswith("—") else state,
+                district=district,
+                language="hi" if language == "हिन्दी" else "en",
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+        login_session(user)
+        st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# 3. DASHBOARD
+# ---------------------------------------------------------------------------
+def render_dashboard_header(user: dict) -> None:
+    name = user.get("name", L("किसान", "Farmer"))
+    role = user.get("role", "Farmer")
+    place = ", ".join(part for part in (user.get("district"), user.get("state")) if part)
+
+    left, mid, right = st.columns([2.4, 1.3, 1])
+    with left:
+        st.markdown(
+            f"<div class='kb-brand'>🌾 Krishi Bhav <span>Saathi</span></div>",
+            unsafe_allow_html=True,
+        )
+    with mid:
+        st.markdown(
+            f"<div style='text-align:right;padding-top:6px;'><span class='kb-badge'>👤 {role}</span>"
+            + (f"<div class='kb-muted'>{place}</div>" if place else "")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+    with right:
+        choice = st.radio(
+            "भाषा / Language",
+            ["हिन्दी", "English"],
+            index=0 if is_hi else 1,
+            horizontal=True,
+            key="dash_lang",
+            label_visibility="collapsed",
+        )
+        new_lang = "hi" if choice == "हिन्दी" else "en"
+        if new_lang != get_current_lang():
+            set_lang(new_lang)
+            st.rerun()
+        if st.button(L("🚪 लॉगआउट", "🚪 Log out"), key="header_logout", use_container_width=True):
+            logout_session()
             st.rerun()
 
-    st.markdown("---")
-    st.success("👈 **" + ("कृपया बाईं ओर के साइडबार से कोई भी मॉड्यूल चुनें (Overview, Forecasting, Regional Map, Ablation Study, XAI):" if is_hi else "Use the sidebar on the left to explore any of the 9 analytical modules (Overview, Forecasting, Regional Map, Ablation Study, XAI):") + "**")
+    st.markdown(
+        f"<div class='kb-greeting'><h2>{L('नमस्ते', 'Namaste')}, {name} जी 🌾</h2>"
+        f"<p>{L('आज का फैसला आसान बनाइए — नीचे अपनी फसल और मंडी चुनें।', 'Make today’s decision simpler — choose your crop and mandi below.')}</p></div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # Researcher Key High-Level System Metrics
-    metrics_deployed_file = Path("data/metrics_deployed.json")
-    dep_7d_rmse = "₹ 332.69 / qtl"
-    if metrics_deployed_file.exists():
-        try:
-            with open(metrics_deployed_file, "r", encoding="utf-8") as f:
-                md = json.load(f)
-                val = md.get("by_horizon", {}).get("7-Day", {}).get("RMSE")
-                if val:
-                    dep_7d_rmse = f"₹ {val:.2f} / qtl"
-        except Exception:
-            pass
+
+def render_market_dashboard(user: dict) -> None:
+    st.markdown(
+        "<style>[data-testid='stSidebar'], [data-testid='stSidebarNav'], "
+        "[data-testid='collapsedControl'] {display:none !important;}</style>",
+        unsafe_allow_html=True,
+    )
+    render_dashboard_header(user)
+
+    preds, geo, hist = load_data()
+    if preds.empty:
+        st.error(L("डेटा उपलब्ध नहीं है। कृपया deployed_test_predictions.csv जांचें।", "Data unavailable. Please check deployed_test_predictions.csv."))
+        return
+
+    all_crops = sorted(preds["commodity"].dropna().unique().tolist())
+    default_crop = st.session_state.get("selected_crop", "Wheat")
+    crop_index = all_crops.index(default_crop) if default_crop in all_crops else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        crop = st.selectbox(L("1. फसल", "1. Crop"), all_crops, index=crop_index, key="dash_crop")
+        st.session_state["selected_crop"] = crop
+
+    map_frame = build_map_frame(preds, geo, crop)
+    all_states_label = L("🇮🇳 पूरे भारत", "🇮🇳 All India")
+    states = [all_states_label] + sorted(map_frame["state"].dropna().unique().tolist()) if not map_frame.empty else [all_states_label]
+    preferred_state = user.get("state", "")
+    state_index = states.index(preferred_state) if preferred_state in states else 0
+    with c2:
+        state = st.selectbox(L("2. राज्य", "2. State"), states, index=state_index, key="dash_state")
+
+    subset = map_frame if state == all_states_label else map_frame[map_frame["state"] == state]
+    all_districts_label = L("सभी जिले", "All districts")
+    districts = [all_districts_label] + sorted(subset["district"].dropna().unique().tolist())
+    preferred_district = user.get("district", "")
+    district_index = districts.index(preferred_district) if preferred_district in districts else 0
+    with c3:
+        district = st.selectbox(L("3. जिला", "3. District"), districts, index=district_index, key="dash_district")
+
+    subset = subset if district == all_districts_label else subset[subset["district"] == district]
+    markets = sorted(subset["market_name"].dropna().unique().tolist()) if not subset.empty else []
+    if not markets:
+        markets = sorted(map_frame["market_name"].dropna().unique().tolist()) if not map_frame.empty else [""]
+    preferred_market = st.session_state.get("selected_market", "")
+    market_index = markets.index(preferred_market) if preferred_market in markets else 0
+    with c4:
+        market = st.selectbox(L("4. मंडी", "4. Mandi"), markets, index=market_index, key="dash_market")
+        st.session_state["selected_market"] = market
+
+    ticker = preds[
+        (preds["commodity"] == crop)
+        & (preds["market"] == market)
+        & (preds["state"] == (map_frame.loc[map_frame["market_name"] == market, "state"].iloc[0] if not map_frame.empty and (map_frame["market_name"] == market).any() else state))
+    ]
+    if ticker.empty:
+        ticker = preds[(preds["commodity"] == crop) & (preds["market"] == market)]
+    if ticker.empty and not map_frame.empty:
+        ticker = preds[(preds["commodity"] == crop) & (preds["market"] == map_frame.iloc[0]["market_name"])]
+        market = map_frame.iloc[0]["market_name"] if not map_frame.empty else market
+    if ticker.empty:
+        st.warning(L("इस मंडी के लिए डेटा नहीं मिला।", "No data found for this mandi."))
+        return
+
+    latest = ticker.sort_values("date").iloc[-1]
+    today_price = float(latest["modal_price"])
+    pred_1d = float(latest.get("predicted_price_1d", today_price))
+    pred_7d = float(latest.get("predicted_price_7d", today_price))
+    pred_30d = float(latest.get("predicted_price_30d", today_price))
+    low_7d = float(latest.get("lower_bound_7d", pred_7d))
+    high_7d = float(latest.get("upper_bound_7d", pred_7d))
+    diff_7d = pred_7d - today_price
+    diff_pct = (diff_7d / today_price * 100) if today_price else 0.0
+    latest_date = str(latest["date"])[:10]
+
+    st.markdown(
+        f"<div class='kb-muted'>{L('अंतिम उपलब्ध व्यापार दिवस', 'Latest available trading day')}: <b>{latest_date}</b> · "
+        f"{L('ऐतिहासिक बैकटेस्ट', 'historical backtest')}</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.markdown(
+            f"<div class='kb-card'><div class='kb-muted'>{L('आज का भाव', 'Today’s price')}</div>"
+            f"<div class='kb-price' style='color:#0f766e;'>{rupees(today_price)}</div>"
+            f"<small class='kb-muted'>{L('प्रति क्विंटल', 'per quintal')}</small></div>",
+            unsafe_allow_html=True,
+        )
+    with k2:
+        color = "#15803d" if diff_7d >= 0 else "#b91c1c"
+        st.markdown(
+            f"<div class='kb-card'><div class='kb-muted'>{L('7 दिन बाद अनुमान', '7-day estimate')}</div>"
+            f"<div class='kb-price' style='color:{color};'>{rupees(pred_7d)}</div>"
+            f"<small class='kb-muted'>{pct(diff_pct)} · {rupees(diff_7d)} / qtl</small></div>",
+            unsafe_allow_html=True,
+        )
+    with k3:
+        st.markdown(
+            f"<div class='kb-card'><div class='kb-muted'>{L('95% भरोसा बैंड', '95% confidence band')}</div>"
+            f"<div style='font-size:1.35rem;font-weight:800;color:#14532d;margin:10px 0 6px 0;'>{rupees(low_7d)} – {rupees(high_7d)}</div>"
+            f"<small class='kb-muted'>{L('7 दिन के लिए', 'for 7 days')}</small></div>",
+            unsafe_allow_html=True,
+        )
+    with k4:
+        st.markdown(
+            f"<div class='kb-card'><div class='kb-muted'>{L('30 दिन बाद', '30-day estimate')}</div>"
+            f"<div class='kb-price' style='color:#7c3aed;'>{rupees(pred_30d)}</div>"
+            f"<small class='kb-muted'>{L('रुझान संकेत', 'trend signal')}</small></div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    tab_advice, tab_date, tab_map, tab_money, tab_nearby = st.tabs(
+        [
+            L("💡 आज की सलाह", "💡 Today’s guidance"),
+            L("📅 तारीख चुनें", "📅 Pick a date"),
+            L("🗺️ मंडी नक्शा", "🗺️ Mandi map"),
+            L("💰 मुनाफ़ा कैलकुलेटर", "💰 Profit calculator"),
+            L("🚜 पास की मंडी", "🚜 Nearby mandis"),
+        ]
+    )
+
+    with tab_advice:
+        render_advice(user, crop, market, today_price, pred_7d, low_7d, high_7d, diff_7d, diff_pct)
+        render_price_trend(ticker, crop, market)
+
+    with tab_date:
+        render_date_planner(latest, crop, market, today_price)
+
+    with tab_map:
+        st.caption(
+            L(
+                "नक्शे पर ज़ूम करें — राज्य ➜ जिला ➜ मंडी स्तर तक भाव देखें।",
+                "Zoom the map to move from state ➜ district ➜ mandi price levels.",
+            )
+        )
+        if not map_frame.empty:
+            map_html = build_unified_map_html(
+                crop_name=crop,
+                merged_geo=map_frame,
+                is_hi=is_hi,
+                selected_state=None if state == all_states_label else state,
+                selected_district=None if district == all_districts_label else district,
+                selected_mandi=market,
+            )
+            st_components.html(map_html, height=600)
+        else:
+            st.info(L("इस फसल के लिए नक्शा उपलब्ध नहीं है।", "Map unavailable for this crop."))
+
+    with tab_money:
+        render_profit_calculator(user, today_price, pred_7d, high_7d, low_7d, market, crop)
+
+    with tab_nearby:
+        render_nearby_mandis(map_frame, market, today_price)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(
+            "<p style='margin:0;color:#78350f;font-weight:600;'>"
+            + L(
+                "🤝 याद रखें: यह सलाह आपकी मेहनत को सहारा देने के लिए है, आपकी जगह फैसला लेने के लिए नहीं। "
+                "मंडी जाने से पहले स्थानीय आढ़ती से भाव ज़रूर मिला लें।",
+                "🤝 Remember: this guidance is here to support your hard work, not to decide for you. "
+                "Always confirm the final rate with your local commission agent before transporting produce.",
+            )
+            + "</p>",
+            unsafe_allow_html=True,
+        )
+
+
+def render_advice(user, crop, market, today_price, pred_7d, low_7d, high_7d, diff_7d, diff_pct) -> None:
+    role = user.get("role", "Farmer")
+    is_buyer = role in {"Shopkeeper / Vendor", "Trader / Commission Agent"}
+
+    if is_buyer:
+        if diff_pct >= 1.5:
+            title = L("🟢 अभी खरीदें — भाव बढ़ने की संभावना", "🟢 Buy now — prices may rise")
+            body = L(
+                f"अगले 7 दिनों में भाव लगभग <b>{rupees(diff_7d)} प्रति क्विंटल</b> बढ़ सकता है। "
+                "अगर आपको माल चाहिए, तो आज खरीदना बेहतर हो सकता है।",
+                f"Prices may rise by about <b>{rupees(diff_7d)} per quintal</b> over the next 7 days. "
+                "If you need stock, buying today could be better.",
+            )
+        elif diff_pct <= -1.5:
+            title = L("🔴 थोड़ा रुकें — भाव गिर सकता है", "🔴 Wait a little — prices may fall")
+            body = L(
+                f"अगले 7 दिनों में भाव लगभग <b>{rupees(abs(diff_7d))} प्रति क्विंटल</b> नीचे आ सकता है। "
+                "जल्दबाजी में खरीदने से बचें; अपनी दुकान की ज़रूरत के हिसाब से फैसला लें।",
+                f"Prices may fall by about <b>{rupees(abs(diff_7d))} per quintal</b> over the next 7 days. "
+                "Avoid rushing; buy only what your shop needs.",
+            )
+        else:
+            title = L("🔵 भाव स्थिर — सामान्य खरीद करें", "🔵 Prices stable — buy as usual")
+            body = L(
+                "बाज़ार में बड़ा बदलाव नहीं दिख रहा। अपनी बिक्री और ग्राहकों की मांग के हिसाब से खरीदें।",
+                "No major move is visible. Buy according to your sales and customer demand.",
+            )
+    else:
+        if diff_pct >= 1.5:
+            title = L("🟢 थोड़ा रुकें — भाव बढ़ने की संभावना", "🟢 Hold a little — prices may rise")
+            body = L(
+                f"अगले 7 दिनों में भाव लगभग <b>{rupees(diff_7d)} प्रति क्विंटल</b> बढ़ सकता है। "
+                "अगर सुरक्षित भंडारण है, तो माल रोकना फायदेमंद हो सकता है।",
+                f"Prices may rise by about <b>{rupees(diff_7d)} per quintal</b> over the next 7 days. "
+                "If you have safe storage, holding may help.",
+            )
+        elif diff_pct <= -1.5:
+            title = L("🔴 आज बेचना बेहतर — भाव गिर सकता है", "🔴 Selling today may be better — prices may fall")
+            body = L(
+                f"अगले 7 दिनों में भाव लगभग <b>{rupees(abs(diff_7d))} प्रति क्विंटल</b> नीचे आ सकता है। "
+                "अगर माल तैयार है, तो आज या कल बेचने से नुकसान टल सकता है।",
+                f"Prices may fall by about <b>{rupees(abs(diff_7d))} per quintal</b> over the next 7 days. "
+                "If your produce is ready, selling today or tomorrow may reduce risk.",
+            )
+        else:
+            title = L("🔵 भाव स्थिर — अपनी सुविधा से बेचें", "🔵 Prices stable — sell when convenient")
+            body = L(
+                "बाज़ार में बड़ा उतार-चढ़ाव नहीं दिख रहा। अपनी नकदी की ज़रूरत और भंडारण की स्थिति देखकर फैसला लें।",
+                "No major swing is visible. Decide based on your cash needs and storage situation.",
+            )
+
+    colour = "#ecfdf5" if diff_7d >= 0 else "#fef2f2"
+    border = "#a7f3d0" if diff_7d >= 0 else "#fecaca"
+    st.markdown(
+        f"<div style='background:{colour};border:1px solid {border};border-radius:18px;padding:22px;'>"
+        f"<h2 style='margin:0 0 8px 0;color:#14351f;'>{title}</h2>"
+        f"<p style='font-size:1.02rem;line-height:1.7;color:#374151;margin:0 0 14px 0;'>{body}</p>"
+        f"<div class='kb-muted'>{L('95% भरोसा बैंड', '95% confidence band')}: "
+        f"<b>{rupees(low_7d)} – {rupees(high_7d)}</b> · {L('बाज़ार', 'market')}: <b>{market}</b> · {crop}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_price_trend(ticker: pd.DataFrame, crop: str, market: str) -> None:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader(L("📈 भाव की दिशा", "📈 Price direction"))
+    history = ticker.sort_values("date").tail(75).copy()
+    history["date"] = pd.to_datetime(history["date"])
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=history["date"],
+            y=history["modal_price"],
+            mode="lines",
+            name=L("वास्तविक भाव", "Actual price"),
+            line=dict(color="#0f766e", width=3),
+        )
+    )
+    if "predicted_price_7d" in history:
+        fig.add_trace(
+            go.Scatter(
+                x=history["date"],
+                y=history["predicted_price_7d"],
+                mode="lines",
+                name=L("7-दिन अनुमान", "7-day forecast"),
+                line=dict(color="#d97706", width=2, dash="dot"),
+            )
+        )
+    if {"lower_bound_7d", "upper_bound_7d"}.issubset(history.columns):
+        fig.add_trace(
+            go.Scatter(
+                x=history["date"],
+                y=history["upper_bound_7d"],
+                mode="lines",
+                line=dict(width=0),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=history["date"],
+                y=history["lower_bound_7d"],
+                mode="lines",
+                fill="tonexty",
+                fillcolor="rgba(217,119,6,0.12)",
+                line=dict(width=0),
+                name=L("95% बैंड", "95% band"),
+                hoverinfo="skip",
+            )
+        )
+    fig.update_layout(
+        height=360,
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.08, x=0),
+        xaxis_title=None,
+        yaxis_title=L("₹ प्रति क्विंटल", "₹ per quintal"),
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.caption(
+        L(
+            f"{crop} · {market} · पिछले 75 व्यापारिक दिनों का रुझान। ऐतिहासिक बैकटेस्ट।",
+            f"{crop} · {market} · trend over the last 75 trading days. Historical backtest.",
+        )
+    )
+
+
+def render_date_planner(latest: pd.Series, crop: str, market: str, today_price: float) -> None:
+    st.subheader(L("📅 किसी खास तारीख का अनुमान", "📅 Estimate for a specific date"))
+    path = build_forecast_path(latest, max_days=30)
+    if path.empty or len(path) < 2:
+        st.info(
+            L(
+                "इस मंडी के लिए इतनी दूर का अनुमान उपलब्ध नहीं है।",
+                "A longer-range estimate is not available for this mandi.",
+            )
+        )
+        return
+
+    anchor_date = path.iloc[0]["date"]
+    first_date = path.iloc[1]["date"].date()
+    last_date = path.iloc[-1]["date"].date()
+    validated = path[path["kind"] == "validated"]
+    default_date = validated.iloc[0]["date"].date() if not validated.empty else first_date
+
+    st.caption(
+        L(
+            "1, 7 और 30 दिन के आंकड़े सीधे मॉडल से हैं। बीच की तारीखों की रेखा उन्हीं तीन बिंदुओं के बीच खींची गई है — यह अलग दैनिक मॉडल नहीं है।",
+            "The 1-, 7- and 30-day values are direct model outputs. Dates in between lie on a straight line between those anchors — they are not a separate daily model.",
+        )
+    )
+
+    picked_date = st.date_input(
+        L(
+            "तारीख चुनें (आखिरी उपलब्ध दिन से 30 दिन तक)",
+            "Pick a date (up to 30 days after the latest available day)",
+        ),
+        value=default_date,
+        min_value=first_date,
+        max_value=last_date,
+        key=f"planner_date_{crop}_{market}",
+        format="DD/MM/YYYY",
+    )
+
+    day = int((pd.Timestamp(picked_date) - anchor_date).days)
+    day = max(0, min(day, int(path["day"].max())))
+    selected = path.loc[path["day"] == day].iloc[0]
+    price = float(selected["price"])
+    low = float(selected["low"])
+    high = float(selected["high"])
+    kind = str(selected["kind"])
+    diff = price - today_price
+    diff_pct = (diff / today_price * 100) if today_price else 0.0
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric(
+        L("चुनी हुई तारीख", "Selected date"),
+        pd.Timestamp(picked_date).strftime("%d %b %Y"),
+        delta=f"{diff:+.0f} / qtl ({diff_pct:+.1f}%)",
+    )
+    m2.metric(L("अनुमानित भाव", "Estimated price"), rupees(price))
+    m3.metric(L("95% भरोसा बैंड", "95% confidence band"), f"{rupees(low)} – {rupees(high)}")
+
+    if kind == "validated":
+        st.success(
+            L(
+                f"यह तारीख सीधे {day}-दिन के मॉडल का आउटपुट है।",
+                f"This date is a direct {day}-day model output.",
+            )
+        )
+    elif kind == "interpolated":
+        st.warning(
+            L(
+                "यह तारीख दो मान्य मॉडल बिंदुओं के बीच की सीधी रेखा से निकाली गई है। इसे अलग से जाँचा गया दैनिक पूर्वानुमान न मानें।",
+                "This date is a straight-line interpolation between two validated model anchors. Do not treat it as a separately validated daily forecast.",
+            )
+        )
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=path["date"],
+            y=path["high"],
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=path["date"],
+            y=path["low"],
+            mode="lines",
+            fill="tonexty",
+            fillcolor="rgba(217,119,6,0.14)",
+            line=dict(width=0),
+            name=L("95% बैंड", "95% band"),
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=path["date"],
+            y=path["price"],
+            mode="lines",
+            name=L("योजना रेखा (1/7/30 के बीच)", "Planning line (between 1/7/30)"),
+            line=dict(color="#d97706", width=3),
+        )
+    )
+    if not validated.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=validated["date"],
+                y=validated["price"],
+                mode="markers+text",
+                text=[f"{int(day_value)}D" for day_value in validated["day"]],
+                textposition="top center",
+                name=L("मॉडल बिंदु", "Validated anchors"),
+                marker=dict(color="#0f766e", size=11, line=dict(color="white", width=2)),
+            )
+        )
+    fig.add_vline(x=selected["date"], line_width=2, line_dash="dot", line_color="#111827")
+    fig.add_annotation(
+        x=selected["date"],
+        y=high,
+        text=pd.Timestamp(picked_date).strftime("%d %b"),
+        showarrow=True,
+        arrowhead=2,
+        ax=0,
+        ay=-28,
+        bgcolor="#111827",
+        font=dict(color="white"),
+    )
+    fig.update_layout(
+        height=360,
+        margin=dict(l=10, r=10, t=20, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.08, x=0),
+        xaxis_title=None,
+        yaxis_title=L("₹ प्रति क्विंटल", "₹ per quintal"),
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    st.caption(
+        L(
+            f"{crop} · {market} · आखिरी उपलब्ध दिन {anchor_date.strftime('%d %b %Y')}। "
+            "30-दिन का मॉडल naive persistence है, इसलिए लंबी अवधि का रुझान सावधानी से देखें।",
+            f"{crop} · {market} · latest available day {anchor_date.strftime('%d %b %Y')}. "
+            "The 30-day model is naive persistence, so read long-range movement cautiously.",
+        )
+    )
+
+
+def render_profit_calculator(user, today_price, pred_7d, high_7d, low_7d, market, crop) -> None:
+    role = user.get("role", "Farmer")
+    is_buyer = role in {"Shopkeeper / Vendor", "Trader / Commission Agent"}
+    st.subheader(L("💰 अपनी मेहनत का हिसाब", "💰 Do the maths on your hard work"))
+    st.caption(
+        L(
+            "क्विंटल और भाड़ा डालकर देखें कि 7 दिन रुकने से कितना फर्क पड़ेगा।",
+            "Set your quantity and freight to see what waiting 7 days could mean.",
+        )
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        quantity = st.slider(L("मात्रा (क्विंटल)", "Quantity (quintals)"), 5, 200, 50, 5)
+    with c2:
+        freight = st.number_input(L("भाड़ा प्रति क्विंटल (₹)", "Freight per quintal (₹)"), 0, 500, 40, 5)
+
+    diff = pred_7d - today_price
+    today_net = (today_price - freight) * quantity
+    week_net = (pred_7d - freight) * quantity
+    delta = week_net - today_net
+    band_low = (low_7d - freight) * quantity
+    band_high = (high_7d - freight) * quantity
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric(L("आज बेचने पर शुद्ध", "Net if sold today"), rupees(today_net))
+    m2.metric(L("7 दिन बाद शुद्ध", "Net after 7 days"), rupees(week_net), delta=rupees(delta))
+    m3.metric(L("95% बैंड में शुद्ध", "Net within 95% band"), f"{rupees(band_low)} – {rupees(band_high)}")
+
+    if is_buyer:
+        st.markdown(
+            L(
+                f"**खरीदार के लिए:** {quantity} क्विंटल आज खरीदने पर लागत लगभग **{rupees((today_price + freight) * quantity)}** है। "
+                f"7 दिन बाद वही माल **{rupees((pred_7d + freight) * quantity)}** का हो सकता है।",
+                f"**For a buyer:** buying {quantity} quintals today costs about **{rupees((today_price + freight) * quantity)}**. "
+                f"In 7 days the same stock could be worth **{rupees((pred_7d + freight) * quantity)}**.",
+            )
+        )
+    else:
+        st.markdown(
+            L(
+                f"**आपकी मेहनत का सीधा हिसाब:** {quantity} क्विंटल पर 7 दिन रुकने से लगभग **{rupees(delta)}** का फर्क पड़ सकता है। "
+                f"भंडारण और भाड़े का खर्च निकालकर भी फायदा है या नहीं — यह आपके गाँव की स्थिति पर तय करें।",
+                f"**The direct maths:** on {quantity} quintals, waiting 7 days could change your return by about **{rupees(delta)}**. "
+                "Check storage and transport costs in your own village before deciding.",
+            )
+        )
+
+    with st.expander(L("भाड़ा और जोखिम की छोटी समझ", "A note on freight and risk")):
+        st.write(
+            L(
+                f"अगर भाव 7 दिन में {rupees(abs(diff))} प्रति क्विंटल बदलता है, तो {quantity} क्विंटल पर कुल असर {rupees(abs(delta))} है। "
+                "भाड़ा दोनों बार लगेगा, इसलिए केवल भाव का अंतर मुनाफ़े का असली माप है।",
+                f"If the price moves by {rupees(abs(diff))} per quintal in 7 days, the total impact on {quantity} quintals is {rupees(abs(delta))}. "
+                "Freight applies either way, so the price difference is the real measure of gain.",
+            )
+        )
+
+
+def render_nearby_mandis(map_frame: pd.DataFrame, market: str, today_price: float) -> None:
+    st.subheader(L("🚜 पास की मंडियों में कहाँ ज़्यादा मिलेगा?", "🚜 Which nearby mandi pays more?"))
+    if map_frame.empty:
+        st.info(L("आस-पास की मंडी का डेटा उपलब्ध नहीं है।", "Nearby mandi data is unavailable."))
+        return
+    selected_rows = map_frame[map_frame["market_name"] == market]
+    state = selected_rows["state"].iloc[0] if not selected_rows.empty else None
+    nearby = map_frame[map_frame["state"] == state] if state else map_frame
+    nearby = nearby[nearby["market_name"] != market].copy()
+    if nearby.empty:
+        st.info(L("इस राज्य में दूसरी मंडी उपलब्ध नहीं है।", "No other mandi in this state."))
+        return
+    nearby["आपकी मंडी से अंतर (₹/qtl)"] = nearby["modal_price"] - today_price
+    nearby["1 ट्रॉली (50 qtl) पर अंतर"] = nearby["आपकी मंडी से अंतर (₹/qtl)"] * 50
+    table = nearby.sort_values("modal_price", ascending=False).head(8)
+    display = table[
+        ["market_name", "district", "modal_price", "आपकी मंडी से अंतर (₹/qtl)", "1 ट्रॉली (50 qtl) पर अंतर"]
+    ].rename(
+        columns={
+            "market_name": L("मंडी", "Mandi"),
+            "district": L("जिला", "District"),
+            "modal_price": L("आज का भाव (₹/qtl)", "Today (₹/qtl)"),
+        }
+    )
+    st.dataframe(
+        display,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            L("आज का भाव (₹/qtl)", "Today (₹/qtl)"): st.column_config.NumberColumn(format="₹%d"),
+            L("आपकी मंडी से अंतर (₹/qtl)", "Gap vs your mandi (₹/qtl)"): st.column_config.NumberColumn(format="₹%d"),
+            L("1 ट्रॉली (50 qtl) पर अंतर", "Gap on 1 trolley (50 qtl)"): st.column_config.NumberColumn(format="₹%d"),
+        },
+    )
+    best = table.iloc[0]
+    gap = float(best["आपकी मंडी से अंतर (₹/qtl)"])
+    if gap > 0:
+        st.success(
+            L(
+                f"**{best['market_name']}** ({best['district']}) में आज {rupees(float(best['modal_price']))} प्रति क्विंटल मिल रहा है — "
+                f"आपकी मंडी से {rupees(gap)} ज़्यादा। 50 क्विंटल पर लगभग **{rupees(gap * 50)}** अतिरिक्त, भाड़ा निकालने से पहले।",
+                f"**{best['market_name']}** ({best['district']}) is paying {rupees(float(best['modal_price']))} per quintal today — "
+                f"{rupees(gap)} more than your mandi. About **{rupees(gap * 50)}** extra on 50 quintals, before freight.",
+            )
+        )
+    else:
+        st.info(L("आपकी वर्तमान मंडी इस समय आस-पास की मंडियों में सबसे अच्छी है।", "Your current mandi is the best nearby option right now."))
+
+
+def render_research_dashboard(user: dict) -> None:
+    render_dashboard_header(user)
+    st.sidebar.markdown("### 🔬 " + L("शोधकर्ता एनालिटिक्स", "Research analytics"))
+    st.sidebar.info(L("भूमिका: शोधकर्ता / अधिकारी", "Role: Researcher / Officer"))
+
+    metrics = load_metrics()
+    by_h = metrics.get("by_horizon", {})
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("National Mandis", "2,515", "APMC Network")
-    m2.metric("Champion Model", "Tuned XGBoost", "Residual Lag Anchor")
-    m3.metric("7-Day RMSE", dep_7d_rmse, "Complete-Feature Test Set")
-    m4.metric("AI Trust Score", "95.6 / 100", "Conformal Coverage")
+    m1.metric(L("मैप किए गए मंडी", "Mapped mandis"), "2,515", L("APMC नेटवर्क", "APMC network"))
+    m2.metric(L("7-दिन RMSE", "7-day RMSE"), rupees(by_h.get("7-Day", {}).get("RMSE", 332.69)), L("पूर्ण-फ़ीचर टेस्ट", "complete-feature test"))
+    m3.metric(L("7-दिन R²", "7-day R²"), f"{by_h.get('7-Day', {}).get('R2', 0.9779):.4f}", L("पूल्ड", "pooled"))
+    m4.metric(L("95% कवरेज", "95% coverage"), f"{metrics.get('mondrian_averages', {}).get('7-Day', {}).get('macro_coverage', 95.9):.1f}%", L("समान-फसल औसत", "equal-crop macro"))
 
     st.markdown("---")
-    st.subheader("📑 Quick Research Navigation")
-    c_n1, c_n2, c_n3 = st.columns(3)
-    with c_n1:
-        st.markdown("• **`1_Overview`**: Pan-India summary & crop leaderboards\n• **`2_Forecasting`**: Multi-horizon conformal bounds & What-If simulator")
-    with c_n2:
-        st.markdown("• **`3_Market_Comparison`**: Pairwise arbitrage matrices & spreads\n• **`4_Regional_Map`**: Geospatial density heatmaps & GraphSAGE edges")
-    with c_n3:
-        st.markdown("• **`7_Model_Performance`**: Multi-model benchmarks\n• **`9_Ablation_Study`**: Component ablation & error reduction")
+    st.subheader(L("📑 शोध मॉड्यूल", "📑 Research modules"))
+    st.markdown(
+        L(
+            "बाईं ओर के साइडबार से 9 विश्लेषण पृष्ठ खोलें: Overview, Forecasting, Market Comparison, Regional Map, "
+            "Historical Trends, Weather, Model Performance, Explainable AI और Ablation Study.",
+            "Use the sidebar to open the 9 analytical pages: Overview, Forecasting, Market Comparison, Regional Map, "
+            "Historical Trends, Weather, Model Performance, Explainable AI and Ablation Study.",
+        )
+    )
+    with st.container(border=True):
+        st.markdown(
+            L(
+                "**डेटा पारदर्शिता:** सभी मॉडल मेट्रिक्स `data/metrics_deployed.json` से आते हैं। "
+                "मूल्यांकन पूर्ण-फ़ीचर परीक्षण पंक्तियों पर है, और 30-दिन का अनुमान naive persistence बेसलाइन है।",
+                "**Data transparency:** all model metrics come from `data/metrics_deployed.json`. "
+                "Evaluation is on complete-feature test rows; the 30-day forecast is a naive persistence baseline.",
+            )
+        )
+
+
+# ---------------------------------------------------------------------------
+# Router
+# ---------------------------------------------------------------------------
+user = current_user()
+if not user:
+    view = st.session_state.get("auth_view", "landing")
+    if view == "login":
+        render_auth("login")
+    elif view == "signup":
+        render_auth("signup")
+    else:
+        render_landing()
+else:
+    # Keep the legacy multipage role guard working ("Researcher" is exact).
+    role = user.get("role", "")
+    st.session_state["user_role"] = "Researcher" if role == "Researcher / Officer" else role
+    if role == "Researcher / Officer":
+        render_research_dashboard(user)
+    else:
+        render_market_dashboard(user)

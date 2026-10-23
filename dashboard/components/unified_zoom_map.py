@@ -445,6 +445,23 @@ def build_unified_map_html(
       pointer-events: none;
       transform: translate(-50%, -50%);
     }}
+    .custom-mandi-price-label {{
+      background: transparent;
+      border: none;
+      pointer-events: none;
+    }}
+    .mandi-price-badge {{
+      background: rgba(255, 255, 255, 0.96);
+      border-left: 4px solid #0284c7;
+      border-radius: 5px;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f172a;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+      white-space: nowrap;
+      pointer-events: none;
+    }}
     .mandi-pin-label {{
       background: rgba(15, 23, 42, 0.92) !important;
       color: #ffffff !important;
@@ -764,6 +781,21 @@ def build_unified_map_html(
       }}
     }}
 
+    // At street level a single district fills most of the viewport. Keep its
+    // tint light so mandi-level bubbles/labels stay readable. No-data
+    // districts stay almost transparent.
+    function getStreetLevelDistrictStyle(feature) {{
+      const base = getDistrictStyle(feature);
+      const noData = base.fillColor === '#94a3b8';
+      return {{
+        fillColor: base.fillColor,
+        weight: noData ? 0.8 : 1.5,
+        opacity: noData ? 0.4 : 0.85,
+        color: noData ? '#e2e8f0' : '#ffffff',
+        fillOpacity: noData ? 0.12 : 0.28
+      }};
+    }}
+
     // Build GeoJSON from TopoJSON
     const stateGeo = topojson.feature(topoData, topoData.objects.states);
     const districtGeo = topojson.feature(topoData, topoData.objects.districts);
@@ -823,10 +855,13 @@ def build_unified_map_html(
         const stats = districtStats[key1] || districtStats[dName.toLowerCase()] || districtStats[normStr(dName)];
 
         layer.on('mouseover', function(e) {{
+          const zoomedIn = map.getZoom() >= 8.8;
           layer.setStyle({{
             weight: 3,
             color: '#f59e0b',
-            fillOpacity: 0.92
+            // At street level the district covers the whole screen; a
+            // 0.92 fill would turn the map into one solid colour block.
+            fillOpacity: zoomedIn ? 0.38 : 0.92
           }});
           if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {{
             layer.bringToFront();
@@ -835,7 +870,11 @@ def build_unified_map_html(
         }});
 
         layer.on('mouseout', function(e) {{
-          districtLayer.resetStyle(layer);
+          if (map.getZoom() >= 8.8) {{
+            layer.setStyle(getStreetLevelDistrictStyle(feature));
+          }} else {{
+            districtLayer.resetStyle(layer);
+          }}
           resetInfoBox();
         }});
 
@@ -864,10 +903,10 @@ def build_unified_map_html(
     const mandiLayer = L.layerGroup();
     mandiPins.forEach(function(pin) {{
       const marker = L.circleMarker([pin.lat, pin.lon], {{
-        radius: pin.is_selected ? 11 : 7.5,
+        radius: pin.is_selected ? 13 : 9,
         fillColor: pin.color,
         color: pin.is_selected ? '#f59e0b' : '#ffffff',
-        weight: pin.is_selected ? 3.5 : 2,
+        weight: pin.is_selected ? 3.5 : 2.5,
         opacity: 1,
         fillOpacity: 0.95
       }});
@@ -926,6 +965,31 @@ def build_unified_map_html(
       mandiLayer.addLayer(marker);
     }});
 
+    // Permanent mandi labels appear only when deeply zoomed, and only for
+    // mandis currently inside the viewport (avoids 900+ DOM labels).
+    const mandiLabelsLayer = L.layerGroup();
+
+    function refreshMandiLabels() {{
+      mandiLabelsLayer.clearLayers();
+      if (map.getZoom() < 9.5) return;
+      const bounds = map.getBounds().pad(0.05);
+      mandiPins.forEach(function(pin) {{
+        if (!bounds.contains([pin.lat, pin.lon])) return;
+        const icon = L.divIcon({{
+          className: 'custom-mandi-price-label',
+          html: `<div class="mandi-price-badge" style="border-left-color:${{pin.color}};">${{pin.name}} · ₹${{pin.price.toLocaleString('en-IN')}}</div>`,
+          iconSize: [130, 20],
+          iconAnchor: [65, 30]
+        }});
+        mandiLabelsLayer.addLayer(L.marker([pin.lat, pin.lon], {{
+          icon: icon,
+          interactive: false,
+          keyboard: false,
+          zIndexOffset: 1200
+        }}));
+      }});
+    }}
+
     // Update Info Box
     function updateInfoBox(title, stats, type) {{
       const elTitle = document.getElementById('info-title');
@@ -981,6 +1045,7 @@ def build_unified_map_html(
         if (map.hasLayer(districtLayer)) map.removeLayer(districtLayer);
         if (map.hasLayer(districtLabelsLayer)) map.removeLayer(districtLabelsLayer);
         if (map.hasLayer(mandiLayer)) map.removeLayer(mandiLayer);
+        if (map.hasLayer(mandiLabelsLayer)) map.removeLayer(mandiLabelsLayer);
 
         badge.innerHTML = isHi 
           ? "🇮🇳 <b>स्तर 1: राज्यवार भाव वितरण</b> (ज़ूम करके जिले देखें)"
@@ -993,6 +1058,7 @@ def build_unified_map_html(
         districtLayer.setStyle(getDistrictStyle);
         if (!map.hasLayer(districtLabelsLayer)) map.addLayer(districtLabelsLayer);
         if (map.hasLayer(mandiLayer)) map.removeLayer(mandiLayer);
+        if (map.hasLayer(mandiLabelsLayer)) map.removeLayer(mandiLabelsLayer);
 
         badge.innerHTML = isHi 
           ? "🗺️ <b>स्तर 2: जिलावार भाव वितरण</b> (ज़ूम करके मंडियां देखें)"
@@ -1002,22 +1068,18 @@ def build_unified_map_html(
         if (map.hasLayer(stateLayer)) map.removeLayer(stateLayer);
         if (map.hasLayer(stateLabelsLayer)) map.removeLayer(stateLabelsLayer);
         if (!map.hasLayer(districtLayer)) map.addLayer(districtLayer);
-        // keep district outlines thin and translucent as soft background context
-        districtLayer.setStyle(function() {{
-          return {{
-            fillColor: '#94a3b8',
-            weight: 1.5,
-            opacity: 0.8,
-            color: '#475569',
-            fillOpacity: 0.12
-          }};
-        }});
+        // Light district tint + prominent mandi bubbles/labels. The old solid
+        // fill turned the whole screen into one colour when zoomed inside a
+        // single district.
+        districtLayer.setStyle(getStreetLevelDistrictStyle);
         if (map.hasLayer(districtLabelsLayer)) map.removeLayer(districtLabelsLayer);
         if (!map.hasLayer(mandiLayer)) map.addLayer(mandiLayer);
+        if (!map.hasLayer(mandiLabelsLayer)) map.addLayer(mandiLabelsLayer);
+        refreshMandiLabels();
 
         badge.innerHTML = isHi 
-          ? "🏛️ <b>स्तर 3: स्थानीय मंडी व शहर पिन</b> (पिन पर क्लिक करें)"
-          : "🏛️ <b>Level 3: Local Mandi & City Pins</b> (Click pins for details)";
+          ? "🏛️ <b>स्तर 3: जिलावार भाव वितरण + स्थानीय मंडी पिन</b> (पिन पर क्लिक करें)"
+          : "🏛️ <b>Level 3: District Price Bands + Local Mandi Pins</b> (Click pins for details)";
       }}
     }}
 
@@ -1026,6 +1088,9 @@ def build_unified_map_html(
     }}
 
     map.on('zoomend', handleZoomChange);
+    map.on('moveend', function() {{
+      if (map.getZoom() >= 9.5) refreshMandiLabels();
+    }});
 
     handleZoomChange();
   </script>

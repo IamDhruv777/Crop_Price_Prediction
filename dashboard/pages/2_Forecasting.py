@@ -13,6 +13,7 @@ if str(dashboard_dir) not in sys.path:
     sys.path.append(str(dashboard_dir))
 
 from i18n import t, get_current_lang, set_lang
+from src.inference.forecast_path import build_forecast_path
 
 st.set_page_config(page_title="Price Forecast | फसल भाव अनुमान", layout="wide", page_icon="🌾")
 
@@ -241,6 +242,81 @@ try:
         height=450
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    # -------------------------------------------------------------
+    # 3.5 Specific Target Date Planner (Any Day from 1 to 30)
+    # -------------------------------------------------------------
+    st.markdown("---")
+    st.subheader("📅 " + ("किसी खास तारीख का सटीक अनुमान (Pick a Specific Date)" if is_hi else "Specific Target Date Price Planner"))
+    st.markdown(
+        ("1 दिन, 7 दिन और 30 दिन के मॉडल बिंदुओं के आधार पर 1 से 30 दिन के बीच किसी भी विशेष तारीख (जैसे 13वीं, 14वीं, 19वीं) का भाव अनुमान देखें:"
+         if is_hi else
+         "Estimate the price on any specific future calendar day (e.g., Day 13, 14, 19) anchored by validated 1D/7D/30D model forecasts:")
+    )
+
+    path_df = build_forecast_path(latest_row, max_days=30)
+    if not path_df.empty and len(path_df) > 1:
+        anchor_date = path_df.iloc[0]["date"]
+        first_date = path_df.iloc[1]["date"].date()
+        last_date = path_df.iloc[-1]["date"].date()
+
+        col_d1, col_d2 = st.columns([1, 2])
+        with col_d1:
+            picked_date = st.date_input(
+                ("तारीख चुनें" if is_hi else "Select Target Date"),
+                value=path_df.iloc[min(7, len(path_df) - 1)]["date"].date(),
+                min_value=first_date,
+                max_value=last_date,
+                key=f"fc_date_picker_{selected_crop}_{market}",
+                format="DD/MM/YYYY"
+            )
+            day_offset = int((pd.Timestamp(picked_date) - anchor_date).days)
+            day_offset = max(1, min(day_offset, int(path_df["day"].max())))
+            row_day = path_df.loc[path_df["day"] == day_offset].iloc[0]
+
+            p_day = float(row_day["price"])
+            low_day = float(row_day["low"])
+            high_day = float(row_day["high"])
+            kind_day = str(row_day["kind"])
+            d_diff = p_day - cur_p
+            d_diff_pct = (d_diff / cur_p * 100) if cur_p > 0 else 0.0
+
+            st.metric(
+                label=("अनुमानित भाव" if is_hi else "Target Date Price"),
+                value=f"₹{p_day:,.2f} / qtl",
+                delta=f"{d_diff:+.2f} ({d_diff_pct:+.1f}%)"
+            )
+            st.metric(
+                label=("95% सुरक्षित दायरा" if is_hi else "95% Safe Band"),
+                value=f"₹{low_day:,.0f} – ₹{high_day:,.0f}"
+            )
+            if kind_day == "validated":
+                st.success("✅ " + (f"यह तारीख सीधे {day_offset}-दिन मॉडल का आउटपुट है।" if is_hi else f"Direct {day_offset}-Day validated model output."))
+            else:
+                st.info("ℹ️ " + (f"यह तारीख {day_offset} दिन आगे की योजना रेखा (Interpolated Path) पर है।" if is_hi else f"Planning trajectory value ({day_offset} days ahead between validated anchors)."))
+
+        with col_d2:
+            fig_path = go.Figure()
+            fig_path.add_trace(go.Scatter(
+                x=path_df["date"], y=path_df["high"], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"
+            ))
+            fig_path.add_trace(go.Scatter(
+                x=path_df["date"], y=path_df["low"], mode="lines", fill="tonexty", fillcolor="rgba(217,119,6,0.12)", line=dict(width=0), name=("95% सुरक्षित दायरा" if is_hi else "95% Band")
+            ))
+            fig_path.add_trace(go.Scatter(
+                x=path_df["date"], y=path_df["price"], mode="lines", line=dict(color="#d97706", width=2.5), name=("दैनिक अनुमान रेखा" if is_hi else "Forecast Path")
+            ))
+            val_pts = path_df[path_df["kind"] == "validated"]
+            fig_path.add_trace(go.Scatter(
+                x=val_pts["date"], y=val_pts["price"], mode="markers+text", text=[f"{int(d)}D" for d in val_pts["day"]], textposition="top center",
+                marker=dict(color="#0f766e", size=9), name=("मॉडल बिंदु" if is_hi else "Direct Anchors")
+            ))
+            fig_path.add_vline(x=row_day["date"], line_width=2, line_dash="dash", line_color="#111827")
+            fig_path.update_layout(
+                title=("30-दिवसीय दैनिक भाव अनुमान रेखा" if is_hi else "30-Day Daily Trajectory & Target Marker"),
+                height=320, margin=dict(l=10, r=10, t=30, b=10), hovermode="x unified"
+            )
+            st.plotly_chart(fig_path, use_container_width=True)
 
     # -------------------------------------------------------------
     # 4. Interactive What-If Scenario Simulation

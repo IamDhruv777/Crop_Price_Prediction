@@ -6,6 +6,7 @@
 .env
 .env.*
 !.env.example
+data/.app_users.json
 *.pem
 *.key
 *.cert
