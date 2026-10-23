@@ -243,6 +243,25 @@ class CropPricePredictor:
         self.models_cache[cache_key] = (model, metadata)
         return model, metadata
 
+    def load_directional_classifier(self, horizon: int) -> Optional[Any]:
+        """Loads trained XGBClassifier head for horizon 1 or 7 if available."""
+        if horizon not in [1, 7]:
+            return None
+        cache_key = f"clf_{horizon}d"
+        if cache_key in self.models_cache:
+            return self.models_cache[cache_key][0]
+
+        clf_file = MODELS_DIR / f"xgb_classifier_{horizon}d.joblib"
+        if clf_file.exists():
+            try:
+                clf = joblib.load(clf_file)
+                self.models_cache[cache_key] = (clf, {})
+                return clf
+            except Exception as e:
+                logger.warning(f"Could not load directional classifier from {clf_file}: {e}")
+                return None
+        return None
+
     def predict(
         self,
         state: str,
@@ -409,6 +428,7 @@ class CropPricePredictor:
                 "recommendation": "🔵 स्थिर (Stable - Naive Persistence Baseline deployed)",
                 "directional_signal": "STABLE",
                 "signal_confidence": "NEUTRAL",
+                "rise_probability": 0.50,
                 "conformal_gate_threshold": gate_threshold,
                 "confidence_level": confidence_level,
                 "uncertainty_delta": round(q95, 2),
@@ -487,21 +507,34 @@ class CropPricePredictor:
         # Minimum noise gate is max(Rs 5.0, 5% of crop-specific 95% conformal interval width)
         gate_threshold = round(float(max(5.0, 0.05 * q95)), 2)
 
-        is_gated_rally = (price_change >= gate_threshold) and (pct_change >= 2.0)
-        is_gated_drop = (price_change <= -gate_threshold) and (pct_change <= -2.0)
+        # Dual-Head Directional Classification Head
+        clf = self.load_directional_classifier(horizon)
+        if clf is not None:
+            try:
+                clf_probs = clf.predict_proba(X_input)
+                rise_prob = round(float(clf_probs[0][1]), 4)
+            except Exception as e:
+                logger.warning(f"Directional classification prediction failed: {e}")
+                rise_prob = round(float(0.50 + np.clip(predicted_delta / 200.0, -0.49, 0.49)), 4)
+        else:
+            rise_prob = round(float(0.50 + np.clip(predicted_delta / 200.0, -0.49, 0.49)), 4)
+
+        # Dual-head Consensus: Gated rally requires both continuous drift >= gate and classifier confirmation
+        is_gated_rally = (price_change >= gate_threshold) and (pct_change >= 2.0) and (rise_prob >= 0.45)
+        is_gated_drop = (price_change <= -gate_threshold) and (pct_change <= -2.0) and (rise_prob <= 0.40)
 
         if is_gated_rally:
             directional_signal = "RALLY"
-            signal_confidence = "HIGH" if price_change >= (0.10 * q95) else "MODERATE"
-            recommendation = "🟢 माल रोकें (Hold - Verified Upside Rally)"
+            signal_confidence = "HIGH" if (price_change >= (0.10 * q95) and rise_prob >= 0.55) else "MODERATE"
+            recommendation = f"🟢 माल रोकें (Hold - Dual-Head Verified Rally, {int(rise_prob*100)}% Probability)"
         elif is_gated_drop:
             directional_signal = "DROP"
-            signal_confidence = "HIGH" if abs(price_change) >= (0.10 * q95) else "MODERATE"
-            recommendation = "🔴 आज बेचें (Sell - Verified Price Softening)"
+            signal_confidence = "HIGH" if (abs(price_change) >= (0.10 * q95) and rise_prob <= 0.35) else "MODERATE"
+            recommendation = f"🔴 आज बेचें (Sell - Dual-Head Verified Softening, {int((1-rise_prob)*100)}% Drop Probability)"
         else:
             directional_signal = "STABLE"
             signal_confidence = "NEUTRAL"
-            recommendation = "🔵 स्थिर (Stable - Range-bound within market noise)"
+            recommendation = f"🔵 स्थिर (Stable - Range-bound equilibrium, {int(rise_prob*100)}% Up Probability)"
 
         return {
             "status": "success",
@@ -520,6 +553,7 @@ class CropPricePredictor:
             "recommendation": recommendation,
             "directional_signal": directional_signal,
             "signal_confidence": signal_confidence,
+            "rise_probability": rise_prob,
             "conformal_gate_threshold": gate_threshold,
             "confidence_level": confidence_level,
             "uncertainty_delta": round(q95, 2),

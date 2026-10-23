@@ -83,6 +83,7 @@ class ForecastResponse(BaseModel):
     percent_change: Optional[float] = None
     directional_signal: Optional[str] = None
     signal_confidence: Optional[str] = None
+    rise_probability: Optional[float] = None
     conformal_gate_threshold: Optional[float] = None
 
 class MarketInfo(BaseModel):

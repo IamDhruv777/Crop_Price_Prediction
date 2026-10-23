@@ -81,6 +81,7 @@ async def predict_forecast(request: ForecastRequest):
             percent_change=res.get("percent_change"),
             directional_signal=res.get("directional_signal"),
             signal_confidence=res.get("signal_confidence"),
+            rise_probability=res.get("rise_probability"),
             conformal_gate_threshold=res.get("conformal_gate_threshold"),
         )
     except HTTPException:

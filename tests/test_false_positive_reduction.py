@@ -123,3 +123,34 @@ def test_7d_conformal_gating_reduces_false_positives():
 
     assert fp_reduction_pct7 >= 45.0, f"Expected >= 45% FP reduction on 7D, got {fp_reduction_pct7:.2f}%"
     assert gated_prec7 > raw_prec7, f"Expected 7D gated precision ({gated_prec7*100:.2f}%) > raw ({raw_prec7*100:.2f}%)"
+
+
+def test_dual_head_directional_classifiers_exist_and_predict():
+    """Test 5: Dual-head directional classifier models exist and compute valid probabilities."""
+    MODELS_DIR = REPO_ROOT / "models" / "trained"
+    import joblib
+
+    for h in [1, 7]:
+        clf_path = MODELS_DIR / f"xgb_classifier_{h}d.joblib"
+        assert clf_path.exists(), f"xgb_classifier_{h}d.joblib must exist"
+        clf = joblib.load(clf_path)
+        assert hasattr(clf, "predict_proba")
+        assert len(clf.feature_names_in_) == 48
+
+
+def test_api_predict_returns_rise_probability():
+    """Test 6: HTTP POST /forecasts/predict returns rise_probability in [0, 1]."""
+    payload = {
+        "state": "Maharashtra",
+        "district": "Pune",
+        "market": "Pune",
+        "crop": "Wheat",
+        "horizon": 1,
+        "confidence_level": 0.95
+    }
+    resp = client.post("/forecasts/predict", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "rise_probability" in body
+    assert body["rise_probability"] is not None
+    assert 0.0 <= body["rise_probability"] <= 1.0
