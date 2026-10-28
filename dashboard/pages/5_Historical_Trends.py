@@ -81,24 +81,37 @@ if df_hist.empty:
     st.error("Historical dataset not found. Please run the data preparation pipeline.")
     st.stop()
 
-# 1. Commodity Selection (First!)
-st.sidebar.header("🔍 " + ("फसल और मंडी चुनें" if is_hi else "Filters"))
+# Commodity & Mandi Selector (Prominent Top Filter Bar)
 commodities = sorted(df_hist['commodity'].dropna().unique().tolist())
 user_def_crop = st.session_state.get("user_crop", "Wheat")
 def_idx = commodities.index(user_def_crop) if user_def_crop in commodities else 0
 
-selected_crop = st.sidebar.selectbox(
-    "1. फसल चुनें (Select Crop):" if is_hi else "1. Select Commodity:",
-    commodities,
-    index=def_idx
-)
+with st.container(border=True):
+    fc1, fc2 = st.columns([1, 1])
+    with fc1:
+        selected_crop = st.selectbox(
+            "🌾 1. फसल चुनें (Select Commodity):" if is_hi else "🌾 1. Select Crop / Commodity:",
+            commodities,
+            index=def_idx,
+            key="hist_top_crop"
+        )
+        st.session_state["user_crop"] = selected_crop
 
-crop_df = df_hist[df_hist['commodity'] == selected_crop]
-markets = sorted(crop_df['market'].dropna().unique().tolist())
-selected_market = st.sidebar.selectbox(
-    "2. मंडी चुनें (Select Mandi):" if is_hi else "2. Select Mandi:",
-    markets
-)
+    crop_df = df_hist[df_hist['commodity'] == selected_crop]
+    markets = sorted(crop_df['market'].dropna().unique().tolist())
+
+    with fc2:
+        selected_market = st.selectbox(
+            "🏛️ 2. मंडी चुनें (Select Mandi):" if is_hi else "🏛️ 2. Select Mandi / APMC:",
+            markets,
+            key="hist_top_market"
+        )
+
+# Sidebar mirror reference
+with st.sidebar:
+    st.markdown("---")
+    st.markdown(f"**🌾 चयनित फसल (Selected Crop):** `{selected_crop}`")
+    st.markdown(f"**🏛️ चयनित मंडी (Selected Mandi):** `{selected_market}`")
 
 mandi_df = crop_df[crop_df['market'] == selected_market].sort_values(by='date')
 

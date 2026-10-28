@@ -65,23 +65,34 @@ else:
     st.title("⚖️ Cross-Mandi Price & Arbitrage Comparison")
     st.markdown("Compare price disparities, spatial spreads, and model forecasts across real nationwide mandis.")
 
-st.sidebar.header("⚙️ " + ("फसल व मंडी चुनाव" if is_hi else "Filters"))
 commodities = sorted(preds_df['commodity'].dropna().unique().tolist())
 user_def_crop = st.session_state.get("user_crop", "Wheat")
 default_crop_idx = commodities.index(user_def_crop) if user_def_crop in commodities else (commodities.index("Wheat") if "Wheat" in commodities else 0)
-selected_crop = st.sidebar.selectbox(
-    "1. " + ("फसल चुनें" if is_hi else "Select Crop"),
-    commodities,
-    index=default_crop_idx
-)
 
-horizon_options = ["7 दिन बाद (Next 7 Days)", "1 दिन बाद (Next 1 Day)", "30 दिन बाद (Next 30 Days)"] if is_hi else ["Next 7 Days (Default)", "Next 1 Day", "Next 30 Days"]
-comparison_horizon = st.sidebar.selectbox(
-    "2. " + ("समय सीमा" if is_hi else "Forecast Horizon"),
-    horizon_options
-)
+with st.container(border=True):
+    fc1, fc2 = st.columns([1, 1])
+    with fc1:
+        selected_crop = st.selectbox(
+            "🌾 फसल चुनें (Select Crop):" if is_hi else "🌾 Select Crop / Commodity:",
+            commodities,
+            index=default_crop_idx,
+            key="comp_top_crop"
+        )
+        st.session_state["user_crop"] = selected_crop
+    with fc2:
+        horizon_options = ["7 दिन बाद (Next 7 Days)", "1 दिन बाद (Next 1 Day)", "30 दिन बाद (Next 30 Days)"] if is_hi else ["Next 7 Days (Default)", "Next 1 Day", "Next 30 Days"]
+        comparison_horizon = st.selectbox(
+            "⏱️ समय सीमा (Forecast Horizon):" if is_hi else "⏱️ Select Forecast Horizon:",
+            horizon_options,
+            key="comp_top_horizon"
+        )
+
 h_suffix = "1d" if "1 Day" in comparison_horizon or "1 दिन" in comparison_horizon else ("30d" if "30 Days" in comparison_horizon or "30 दिन" in comparison_horizon else "7d")
 h_label = ("1 दिन" if "1" in h_suffix else ("30 दिन" if "30" in h_suffix else "7 दिन")) if is_hi else ("1-Day" if "1" in h_suffix else ("30-Day" if "30" in h_suffix else "7-Day"))
+
+st.sidebar.header("⚙️ " + ("मंडी चुनाव" if is_hi else "Mandi Filters"))
+st.sidebar.markdown(f"**🌾 चुनी हुई फसल:** `{selected_crop}`")
+st.sidebar.markdown(f"**⏱️ समय सीमा:** `{h_label}`")
 
 pred_col = f'predicted_price_{h_suffix}' if f'predicted_price_{h_suffix}' in preds_df.columns else ('predicted_price_7d' if 'predicted_price_7d' in preds_df.columns else 'modal_price')
 act_col = f'target_price_{h_suffix}' if f'target_price_{h_suffix}' in preds_df.columns else (f'actual_price_{h_suffix}' if f'actual_price_{h_suffix}' in preds_df.columns else ('modal_price' if 'modal_price' in preds_df.columns else None))
