@@ -125,12 +125,16 @@ else:
     disp_cols = ["Architecture_Type", "Model", "R2", "Forecast_Accuracy", "Conformal_Coverage_95", "Tolerance_Accuracy_10", "RMSE", "MAE", "MAPE", "Trust_Score", "Directional_Accuracy", "Precision", "Recall", "F1_Score", "Training_Time_Sec"]
     available_disp = [c for c in disp_cols if c in filtered_df.columns]
 
-    st.dataframe(
-        filtered_df[available_disp].style
-        .highlight_min(subset=["RMSE", "MAE", "MAPE"], color="#d4edda")
-        .highlight_max(subset=["R2", "Trust_Score", "Directional_Accuracy"], color="#cce5ff"),
-        use_container_width=True
-    )
+    min_subset = [c for c in ["RMSE", "MAE", "MAPE"] if c in available_disp]
+    max_subset = [c for c in ["R2", "Trust_Score", "Directional_Accuracy", "Forecast_Accuracy", "Relative_Accuracy", "Tolerance_10pct", "F1_Score"] if c in available_disp]
+
+    styler = filtered_df[available_disp].style
+    if min_subset:
+        styler = styler.highlight_min(subset=min_subset, color="#d4edda")
+    if max_subset:
+        styler = styler.highlight_max(subset=max_subset, color="#cce5ff")
+
+    st.dataframe(styler, use_container_width=True)
 
     st.markdown("---")
     c1, c2 = st.columns(2)

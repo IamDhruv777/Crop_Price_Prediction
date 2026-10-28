@@ -67,9 +67,9 @@ h_suffix = "1d" if "1 Day" in horizon_choice or "कल" in horizon_choice else 
 h_label = "1-Day" if "1" in h_suffix else ("30-Day" if "30" in h_suffix else "7-Day")
 h_hindi_label = "1 दिन" if "1" in h_suffix else ("30 दिन" if "30" in h_suffix else "7 दिन")
 
-pred_col = f'predicted_price_{h_suffix}' if f'predicted_price_{h_suffix}' in preds_df.columns else 'predicted_price_7d'
-act_col = f'actual_price_{h_suffix}' if f'actual_price_{h_suffix}' in preds_df.columns else 'actual_price_7d'
-delta_col = f'uncertainty_delta_{h_suffix}' if f'uncertainty_delta_{h_suffix}' in preds_df.columns else 'uncertainty_delta'
+pred_col = f'predicted_price_{h_suffix}' if f'predicted_price_{h_suffix}' in preds_df.columns else ('predicted_price_7d' if 'predicted_price_7d' in preds_df.columns else 'modal_price')
+act_col = f'target_price_{h_suffix}' if f'target_price_{h_suffix}' in preds_df.columns else (f'actual_price_{h_suffix}' if f'actual_price_{h_suffix}' in preds_df.columns else ('modal_price' if 'modal_price' in preds_df.columns else None))
+delta_col = f'uncertainty_delta_{h_suffix}' if f'uncertainty_delta_{h_suffix}' in preds_df.columns else ('uncertainty_delta' if 'uncertainty_delta' in preds_df.columns else None)
 
 # All 11 commodities
 all_commodities = sorted(preds_df['commodity'].dropna().unique().tolist()) if not preds_df.empty else [
@@ -239,18 +239,22 @@ else:
     st.subheader(f"Commodity-Wise Forecast & Uncertainty Matrix ({h_label} Horizon)")
 
     if not preds_df.empty:
-        crop_summary = preds_df.groupby('commodity').agg(
-            Records=('modal_price', 'count'),
-            Current_Avg_Price=('modal_price', 'mean'),
-            Predicted_Avg=(pred_col, 'mean'),
-            Actual_Avg=(act_col, 'mean'),
-            Avg_Uncertainty_Delta=(delta_col, 'mean')
-        ).reset_index()
+        agg_kwargs = {
+            'Records': ('modal_price', 'count'),
+            'Current_Avg_Price': ('modal_price', 'mean'),
+            'Predicted_Avg': (pred_col, 'mean'),
+        }
+        if act_col and act_col in preds_df.columns:
+            agg_kwargs['Actual_Avg'] = (act_col, 'mean')
+        if delta_col and delta_col in preds_df.columns:
+            agg_kwargs['Avg_Uncertainty_Delta'] = (delta_col, 'mean')
+
+        crop_summary = preds_df.groupby('commodity').agg(**agg_kwargs).reset_index()
         
-        crop_summary['Current_Avg_Price'] = crop_summary['Current_Avg_Price'].round(2)
-        crop_summary['Predicted_Avg'] = crop_summary['Predicted_Avg'].round(2)
-        crop_summary['Actual_Avg'] = crop_summary['Actual_Avg'].round(2)
-        crop_summary['Avg_Uncertainty_Delta'] = crop_summary['Avg_Uncertainty_Delta'].round(2)
+        for c in ['Current_Avg_Price', 'Predicted_Avg', 'Actual_Avg', 'Avg_Uncertainty_Delta']:
+            if c in crop_summary.columns:
+                crop_summary[c] = crop_summary[c].round(2)
+
         crop_summary[f'{h_label}_Trend'] = np.where(crop_summary['Predicted_Avg'] > crop_summary['Current_Avg_Price'], "📈 Bullish (+)", "📉 Bearish (-)")
         
         st.dataframe(
@@ -258,10 +262,11 @@ else:
             use_container_width=True
         )
         
+        bar_targets = [c for c in ['Current_Avg_Price', 'Predicted_Avg', 'Actual_Avg'] if c in crop_summary.columns]
         fig = px.bar(
             crop_summary,
             x='commodity',
-            y=['Current_Avg_Price', 'Predicted_Avg', 'Actual_Avg'],
+            y=bar_targets,
             barmode='group',
             title=f"Commodity Wholesale Price Trajectory ({h_label} Horizon: Current vs Predicted vs Ground Truth)",
             labels={"value": "Wholesale Price (₹/Quintal)", "commodity": "Commodity", "variable": "Price Metric"}
