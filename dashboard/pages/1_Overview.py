@@ -278,9 +278,19 @@ else:
     st.subheader("Champion Models by Architecture Family")
     if not leaderboard_df.empty:
         best_per_arch = leaderboard_df.loc[leaderboard_df.groupby(['Horizon', 'Architecture_Type'])['RMSE'].idxmin()]
+        candidate_cols = ['Horizon', 'Architecture_Type', 'Model', 'RMSE', 'MAE', 'MAPE', 'R2', 'Directional_Accuracy', 'Conformal_Coverage_95']
+        show_cols = [c for c in candidate_cols if c in best_per_arch.columns]
+        
+        min_sub = [c for c in ['RMSE', 'MAE', 'MAPE'] if c in show_cols]
+        max_sub = [c for c in ['R2', 'Directional_Accuracy', 'Conformal_Coverage_95'] if c in show_cols]
+        
+        styler = best_per_arch[show_cols].style
+        if min_sub:
+            styler = styler.highlight_min(subset=min_sub, color='#d4edda')
+        if max_sub:
+            styler = styler.highlight_max(subset=max_sub, color='#cce5ff')
+            
         st.dataframe(
-            best_per_arch[['Horizon', 'Architecture_Type', 'Model', 'RMSE', 'MAPE', 'R2', 'Trust_Score']].style
-            .highlight_min(subset=['RMSE', 'MAPE'], color='#d4edda')
-            .highlight_max(subset=['R2', 'Trust_Score'], color='#cce5ff'),
+            styler,
             use_container_width=True
         )
