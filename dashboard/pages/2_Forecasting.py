@@ -82,35 +82,49 @@ def get_mondrian_delta(crop: str, h_label_str: str) -> float:
 try:
     preds_df = pd.read_csv(PREDS_FILE)
     
-    st.sidebar.header("⚙️ " + ("फसल व मंडी चुनाव" if is_hi else "Forecast Filters"))
-    
     # 1. SELECT CROP FIRST (Reveals all 11 crops)
     all_commodities = sorted(preds_df['commodity'].dropna().unique().tolist())
     user_def_crop = st.session_state.get("user_crop", "Wheat")
     default_crop_idx = all_commodities.index(user_def_crop) if user_def_crop in all_commodities else (all_commodities.index("Wheat") if "Wheat" in all_commodities else 0)
-    selected_crop = st.sidebar.selectbox(
-        "1. " + ("फसल चुनें" if is_hi else "Select Crop"),
-        all_commodities,
-        index=default_crop_idx
-    )
-    
-    # 2. SELECT MANDI SECOND (Filtered for that crop)
-    crop_sub = preds_df[preds_df['commodity'] == selected_crop]
-    available_markets = sorted(crop_sub['market'].dropna().unique().tolist())
-    market = st.sidebar.selectbox(
-        "2. " + ("मंडी चुनें" if is_hi else "Select Mandi"),
-        available_markets
-    )
-    
-    # 3. SELECT HORIZON
-    horizon_options = ["7 दिन बाद (Next 7 Days)", "1 दिन बाद (Next 1 Day)", "30 दिन बाद (Next 30 Days)"] if is_hi else ["Next 7 Days (Default)", "Next 1 Day", "Next 30 Days"]
-    horizon_choice = st.sidebar.selectbox(
-        "3. " + ("समय सीमा" if is_hi else "Forecast Horizon"),
-        horizon_options
-    )
-    h_suffix = "1d" if "1 Day" in horizon_choice or "1 दिन" in horizon_choice else ("30d" if "30 Days" in horizon_choice or "30 दिन" in horizon_choice else "7d")
+
+    # Interactive Top Filter Bar (Directly visible without sidebar scrolling)
+    with st.container(border=True):
+        fc1, fc2, fc3 = st.columns([1.2, 1.2, 1])
+        with fc1:
+            selected_crop = st.selectbox(
+                "🌾 1. फसल चुनें (Crop):" if is_hi else "🌾 1. Select Crop / Commodity:",
+                all_commodities,
+                index=default_crop_idx,
+                key="fc_top_crop"
+            )
+            st.session_state["user_crop"] = selected_crop
+
+        crop_sub = preds_df[preds_df['commodity'] == selected_crop]
+        available_markets = sorted(crop_sub['market'].dropna().unique().tolist())
+
+        with fc2:
+            market = st.selectbox(
+                "🏛️ 2. मंडी चुनें (Mandi):" if is_hi else "🏛️ 2. Select Mandi / APMC:",
+                available_markets,
+                key="fc_top_market"
+            )
+
+        with fc3:
+            horizon_options = ["7 दिन बाद (Next 7 Days)", "1 दिन बाद (Next 1 Day)", "30 दिन बाद (Next 30 Days)"] if is_hi else ["Next 7 Days (Default)", "Next 1 Day", "Next 30 Days"]
+            horizon_choice = st.selectbox(
+                "⏱️ 3. समय सीमा (Horizon):" if is_hi else "⏱️ 3. Select Horizon:",
+                horizon_options,
+                key="fc_top_horizon"
+            )
+
+    h_suffix = "1d" if "1 Day" in horizon_choice or "1 दिन" in horizon_choice else ("30d" if "30 Days" in horizon_choice or "महीने" in horizon_choice else "7d")
     h_label = ("1 दिन" if "1" in h_suffix else ("30 दिन" if "30" in h_suffix else "7 दिन")) if is_hi else ("1-Day" if "1" in h_suffix else ("30-Day" if "30" in h_suffix else "7-Day"))
 
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown(f"**🌾 फसल (Crop):** `{selected_crop}`")
+        st.markdown(f"**🏛️ मंडी (Mandi):** `{market}`")
+        st.markdown(f"**⏱️ समय सीमा (Horizon):** `{h_label}`")
     # Filter for selected market and crop
     market_df = crop_sub[crop_sub['market'] == market].sort_values('date')
     if market_df.empty:

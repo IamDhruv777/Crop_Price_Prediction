@@ -101,43 +101,66 @@ else:
 if PREDS_PATH.exists():
     preds_df = pd.read_csv(PREDS_PATH)
     all_commodities = sorted(preds_df['commodity'].dropna().unique().tolist())
-    
-    st.sidebar.header("🔍 " + ("फसल एवं समय फिल्टर" if is_hi else "Filters"))
     user_def_crop = st.session_state.get("user_crop", "Wheat")
     def_idx = all_commodities.index(user_def_crop) if user_def_crop in all_commodities else 0
-    
-    selected_commodity = st.sidebar.selectbox(
-        "फसल चुनें (Commodity)" if is_hi else "Select Commodity",
-        ["All Commodities (सभी फसलें)"] + all_commodities,
-        index=def_idx + 1 if user_def_crop in all_commodities else 0
-    )
-    
+
+    with st.container(border=True):
+        fc1, fc2, fc3 = st.columns([1.2, 1, 1])
+        with fc1:
+            selected_commodity = st.selectbox(
+                "🌾 फसल चुनें (Commodity):" if is_hi else "🌾 Select Commodity:",
+                ["All Commodities (सभी फसलें)"] + all_commodities,
+                index=def_idx + 1 if user_def_crop in all_commodities else 0,
+                key="map_top_crop"
+            )
+            if "All Commodities" not in selected_commodity:
+                st.session_state["user_crop"] = selected_commodity
+
+        with fc2:
+            horizon_choice = st.selectbox(
+                "⏱️ पूर्वानुमान अवधि:" if is_hi else "⏱️ Forecast Horizon:",
+                ["Next 7 Days (7 दिन बाद - डिफ़ॉल्ट)", "Next 1 Day (कल का भाव)", "Next 30 Days (1 महीने बाद)"],
+                key="map_top_horizon"
+            )
+
+        with fc3:
+            states = ["All States (पूरे राज्य)"] + sorted(geo_df['state'].dropna().unique().tolist())
+            selected_state = st.selectbox(
+                "🏛️ राज्य चुनें (Filter State):" if is_hi else "🏛️ Filter by State:",
+                states,
+                key="map_top_state"
+            )
+
     if "All Commodities" not in selected_commodity:
-        clean_crop = selected_commodity.split(" (")[0]
+        clean_crop = selected_commodity
         sub_preds = preds_df[preds_df['commodity'] == clean_crop]
     else:
+        clean_crop = None
         sub_preds = preds_df
 
-    horizon_choice = st.sidebar.selectbox(
-        "पूर्वानुमान अवधि" if is_hi else "Select Forecast Horizon",
-        ["Next 7 Days (7 दिन बाद - डिफ़ॉल्ट)", "Next 1 Day (कल का भाव)", "Next 30 Days (1 महीने बाद)"]
-    )
     h_suffix = "1d" if "1 Day" in horizon_choice or "कल" in horizon_choice else ("30d" if "30 Days" in horizon_choice or "महीने" in horizon_choice else "7d")
     h_label = "1-Day" if "1" in h_suffix else ("30-Day" if "30" in h_suffix else "7-Day")
     h_hindi = "1 दिन" if "1" in h_suffix else ("30 दिन" if "30" in h_suffix else "7 दिन")
 
-    pred_col = f'predicted_price_{h_suffix}' if f'predicted_price_{h_suffix}' in sub_preds.columns else 'predicted_price_7d'
-    delta_col = f'uncertainty_delta_{h_suffix}' if f'uncertainty_delta_{h_suffix}' in sub_preds.columns else 'uncertainty_delta'
+    pred_col = f'predicted_price_{h_suffix}' if f'predicted_price_{h_suffix}' in sub_preds.columns else ('predicted_price_7d' if 'predicted_price_7d' in sub_preds.columns else 'modal_price')
+    delta_col = f'uncertainty_delta_{h_suffix}' if f'uncertainty_delta_{h_suffix}' in sub_preds.columns else ('uncertainty_delta' if 'uncertainty_delta' in sub_preds.columns else None)
         
     latest_by_market = sub_preds.groupby('market').last().reset_index()
+    req_cols = ['market', 'commodity', 'modal_price', pred_col]
+    if delta_col and delta_col in latest_by_market.columns:
+        req_cols.append(delta_col)
+
     merged_map = pd.merge(
         geo_df,
-        latest_by_market[['market', 'commodity', 'modal_price', pred_col, delta_col]],
+        latest_by_market[req_cols],
         left_on='market_name',
         right_on='market',
         how='left'
     )
-    merged_map['conformal_delta'] = merged_map[delta_col].fillna(get_mondrian_default_delta(h_label, clean_crop if 'All Commodities' not in selected_commodity else None))
+    if delta_col and delta_col in merged_map.columns:
+        merged_map['conformal_delta'] = merged_map[delta_col].fillna(get_mondrian_default_delta(h_label, clean_crop))
+    else:
+        merged_map['conformal_delta'] = get_mondrian_default_delta(h_label, clean_crop)
 
     # Only plot mandis that actually have a real observed price and a real
     # forecast for this crop/horizon. Never invent a price from coordinates.
@@ -152,11 +175,15 @@ else:
     merged_map['selected_forecast'] = 2250.0
     merged_map['price_drift_pct'] = 2.27
     merged_map['conformal_delta'] = get_mondrian_default_delta('7-Day')
+    states = ["All States (पूरे राज्य)"] + sorted(geo_df['state'].dropna().unique().tolist())
+    selected_state = "All States (पूरे राज्य)"
 
-st.sidebar.header("🗺️ " + ("नक्शा नियंत्रण" if is_hi else "Map Controls"))
-
-states = ["All States (पूरे राज्य)"] + sorted(geo_df['state'].dropna().unique().tolist())
-selected_state = st.sidebar.selectbox("राज्य चुनें (State)" if is_hi else "Filter by State", states)
+# Sidebar Status
+with st.sidebar:
+    st.markdown("---")
+    st.markdown(f"**🌾 फसल (Crop):** `{selected_commodity if PREDS_PATH.exists() else 'All'}`")
+    st.markdown(f"**⏱️ समय सीमा (Horizon):** `{h_label}`")
+    st.markdown(f"**🏛️ राज्य (State):** `{selected_state}`")
 
 filtered_map = merged_map.copy()
 if "All States" not in selected_state:
@@ -165,8 +192,9 @@ if "All States" not in selected_state:
 
 if filtered_map.empty:
     st.warning(
-        "No mandi has both a recorded price and a forecast for this crop/horizon/state combination. "
-        "Please choose another commodity, horizon or state."
+        f"⚠️ चुनी हुई फसल ({selected_commodity}) के लिए '{selected_state}' में कोई सक्रिय मंडी दर्ज नहीं है। कृपया 'All States' या कोई अन्य राज्य चुनें।"
+        if is_hi else
+        f"⚠️ No active APMC mandi trading '{selected_commodity}' found in '{selected_state}'. Please select 'All States' or another state."
     )
     st.stop()
 
