@@ -268,12 +268,25 @@ try:
     st.markdown("---")
     st.subheader("📅 " + ("किसी खास तारीख का सटीक अनुमान (Pick a Specific Date)" if is_hi else "Specific Target Date Price Planner"))
     st.markdown(
-        ("1 दिन, 7 दिन और 30 दिन के मॉडल बिंदुओं के आधार पर 1 से 30 दिन के बीच किसी भी विशेष तारीख (जैसे 13वीं, 14वीं, 19वीं) का भाव अनुमान देखें:"
+        ("1 दिन, 7 दिन और 30 दिन के मॉडल बिंदुओं के आधार पर 1 से 30 दिन के बीच किसी भी विशेष तारीख (जैसे 23 नवंबर, 30 नवंबर या दिसंबर) का भाव अनुमान देखें:"
          if is_hi else
-         "Estimate the price on any specific future calendar day (e.g., Day 13, 14, 19) anchored by validated 1D/7D/30D model forecasts:")
+         "Estimate the price on any specific future calendar day (e.g., Nov 23, Nov 30, or Dec) anchored by validated 1D/7D/30D model forecasts:")
     )
 
-    path_df = build_forecast_path(latest_row, max_days=30)
+    cal_mode = st.radio(
+        "कैलेंडर टाइमलाइन मोड (Calendar Mode):" if is_hi else "Calendar Timeline Mode:",
+        [
+            "📅 लाइव आगामी 30 दिन (Live Horizon from Today — Nov/Dec 2026)" if is_hi else "📅 Live 30-Day Planning (Today: Nov/Dec 2026)",
+            "🏛️ ऐतिहासिक बैकटेस्ट ऑडिट (2017 Archive Benchmark)" if is_hi else "🏛️ Historical Backtest Audit (2017 Archive Holdout)"
+        ],
+        index=0,
+        horizontal=True,
+        key=f"fc_cal_mode_{selected_crop}_{market}"
+    )
+    is_live_cal = ("Live" in cal_mode or "लाइव" in cal_mode)
+    today_anchor = pd.Timestamp.now().normalize() if is_live_cal else None
+
+    path_df = build_forecast_path(latest_row, max_days=30, anchor_date=today_anchor)
     if not path_df.empty and len(path_df) > 1:
         anchor_date = path_df.iloc[0]["date"]
         first_date = path_df.iloc[1]["date"].date()
@@ -282,7 +295,7 @@ try:
         col_d1, col_d2 = st.columns([1, 2])
         with col_d1:
             picked_date = st.date_input(
-                ("तारीख चुनें" if is_hi else "Select Target Date"),
+                ("तारीख चुनें (Select Date):" if is_hi else "Select Target Date:"),
                 value=path_df.iloc[min(7, len(path_df) - 1)]["date"].date(),
                 min_value=first_date,
                 max_value=last_date,
@@ -300,8 +313,9 @@ try:
             d_diff = p_day - cur_p
             d_diff_pct = (d_diff / cur_p * 100) if cur_p > 0 else 0.0
 
+            target_date_str = pd.Timestamp(picked_date).strftime("%d %B %Y")
             st.metric(
-                label=("अनुमानित भाव" if is_hi else "Target Date Price"),
+                label=(f"अनुमानित भाव ({target_date_str})" if is_hi else f"Expected Price ({target_date_str})"),
                 value=f"₹{p_day:,.2f} / qtl",
                 delta=f"{d_diff:+.2f} ({d_diff_pct:+.1f}%)"
             )
@@ -310,9 +324,9 @@ try:
                 value=f"₹{low_day:,.0f} – ₹{high_day:,.0f}"
             )
             if kind_day == "validated":
-                st.success("✅ " + (f"यह तारीख सीधे {day_offset}-दिन मॉडल का आउटपुट है।" if is_hi else f"Direct {day_offset}-Day validated model output."))
+                st.success("✅ " + (f"**{target_date_str}** सीधे {day_offset}-दिन मॉडल का आउटपुट है।" if is_hi else f"**{target_date_str}** is a direct {day_offset}-Day validated model output."))
             else:
-                st.info("ℹ️ " + (f"यह तारीख {day_offset} दिन आगे की योजना रेखा (Interpolated Path) पर है।" if is_hi else f"Planning trajectory value ({day_offset} days ahead between validated anchors)."))
+                st.info("ℹ️ " + (f"**{target_date_str}** आज से **{day_offset} दिन आगे** की अनुमानित योजना रेखा (Interpolated Path) पर है।" if is_hi else f"**{target_date_str}** is **{day_offset} days ahead** on the planning trajectory."))
 
         with col_d2:
             fig_path = go.Figure()

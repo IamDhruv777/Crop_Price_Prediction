@@ -32,7 +32,11 @@ def _number(source: Any, key: str) -> float:
     return value if np.isfinite(value) else float("nan")
 
 
-def build_forecast_path(latest: Any, max_days: int = 30) -> pd.DataFrame:
+def build_forecast_path(
+    latest: Any,
+    max_days: int = 30,
+    anchor_date: pd.Timestamp | str | None = None,
+) -> pd.DataFrame:
     """Return day-by-day price anchors and interpolated planning values.
 
     Parameters
@@ -43,6 +47,9 @@ def build_forecast_path(latest: Any, max_days: int = 30) -> pd.DataFrame:
     max_days:
         Maximum day offset to return. Capped at the furthest available anchor
         so the function never extrapolates beyond a validated horizon.
+    anchor_date:
+        Optional reference date to anchor Day 0 to (e.g. today's live calendar date).
+        If omitted, defaults to the historical date in ``latest['date']``.
 
     Returns
     -------
@@ -55,14 +62,22 @@ def build_forecast_path(latest: Any, max_days: int = 30) -> pd.DataFrame:
     if latest is None:
         return pd.DataFrame(columns=_PATH_COLUMNS)
 
-    raw_date = latest.get("date") if hasattr(latest, "get") else None
-    if raw_date is None or pd.isna(raw_date):
-        return pd.DataFrame(columns=_PATH_COLUMNS)
+    norm_anchor = None
+    if anchor_date is not None:
+        try:
+            norm_anchor = pd.to_datetime(anchor_date).normalize()
+        except (TypeError, ValueError):
+            norm_anchor = None
 
-    try:
-        anchor_date = pd.to_datetime(raw_date).normalize()
-    except (TypeError, ValueError):
-        return pd.DataFrame(columns=_PATH_COLUMNS)
+    if norm_anchor is None:
+        raw_date = latest.get("date") if hasattr(latest, "get") else None
+        if raw_date is None or pd.isna(raw_date):
+            return pd.DataFrame(columns=_PATH_COLUMNS)
+
+        try:
+            norm_anchor = pd.to_datetime(raw_date).normalize()
+        except (TypeError, ValueError):
+            return pd.DataFrame(columns=_PATH_COLUMNS)
 
     anchors: dict[int, tuple[float, float, float]] = {}
     for day, price_key, low_key, high_key in ANCHOR_SPECS:
@@ -104,7 +119,7 @@ def build_forecast_path(latest: Any, max_days: int = 30) -> pd.DataFrame:
         rows.append(
             {
                 "day": day,
-                "date": anchor_date + pd.Timedelta(days=day),
+                "date": norm_anchor + pd.Timedelta(days=day),
                 "price": price,
                 "low": low,
                 "high": high,

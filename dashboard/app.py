@@ -1149,7 +1149,20 @@ def render_price_trend(ticker: pd.DataFrame, crop: str, market: str) -> None:
 
 def render_date_planner(latest: pd.Series, crop: str, market: str, today_price: float) -> None:
     st.subheader(L("📅 किसी खास तारीख का अनुमान", "📅 Estimate for a specific date"))
-    path = build_forecast_path(latest, max_days=30)
+
+    cal_mode = st.radio(
+        L("कैलेंडर मोड चुनें", "Select Calendar Mode"),
+        [
+            L("📅 लाइव आगामी 30 दिन (Nov/Dec 2026)", "📅 Live 30-Day Planning (Nov/Dec 2026)"),
+            L("🏛️ ऐतिहासिक बैकटेस्ट ऑडिट (2017 Archive)", "🏛️ Historical Backtest Audit (2017 Archive)"),
+        ],
+        index=0,
+        horizontal=True,
+        key=f"app_cal_mode_{crop}_{market}",
+    )
+    today_anchor = pd.Timestamp.now().normalize() if ("Live" in cal_mode or "लाइव" in cal_mode) else None
+
+    path = build_forecast_path(latest, max_days=30, anchor_date=today_anchor)
     if path.empty or len(path) < 2:
         st.info(
             L(
@@ -1174,8 +1187,8 @@ def render_date_planner(latest: pd.Series, crop: str, market: str, today_price: 
 
     picked_date = st.date_input(
         L(
-            "तारीख चुनें (आखिरी उपलब्ध दिन से 30 दिन तक)",
-            "Pick a date (up to 30 days after the latest available day)",
+            "तारीख चुनें (आज से 30 दिन तक)",
+            "Pick a date (up to 30 days ahead)",
         ),
         value=default_date,
         min_value=first_date,
