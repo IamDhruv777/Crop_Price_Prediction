@@ -29,6 +29,9 @@ if not PREDS_PATH.exists():
     st.stop()
 
 preds_df = pd.read_csv(PREDS_PATH)
+if not preds_df.empty:
+    from src.utils.price_indexer import calibrate_dataframe
+    preds_df = calibrate_dataframe(preds_df)
 
 # Language Toggle in Sidebar
 st.sidebar.header(t("sidebar_lang_title"))

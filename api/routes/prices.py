@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 import pandas as pd
 from pathlib import Path
+from src.utils.price_indexer import calibrate_dataframe
 
 router = APIRouter(prefix='/prices', tags=['prices'])
 
@@ -13,6 +14,7 @@ async def get_current_prices(limit: int = 50):
     """
     if PREDS_PATH.exists():
         df = pd.read_csv(PREDS_PATH)
+        df = calibrate_dataframe(df)
         latest = df.groupby('market').last().reset_index()
         return {
             "total_markets": len(latest),
@@ -31,6 +33,7 @@ async def get_price_history(market_id: str = None, commodity: str = None, limit:
             df = df[df['market'].str.lower() == market_id.lower()]
         if commodity:
             df = df[df['commodity'].str.lower() == commodity.lower()]
+        df = calibrate_dataframe(df)
         return {"records": df.tail(limit).to_dict(orient='records')}
     return {"records": []}
 

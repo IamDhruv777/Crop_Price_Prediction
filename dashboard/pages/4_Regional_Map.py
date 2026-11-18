@@ -100,6 +100,9 @@ else:
 # Merge latest predictions with optional commodity & horizon filter
 if PREDS_PATH.exists():
     preds_df = pd.read_csv(PREDS_PATH)
+    if not preds_df.empty:
+        from src.utils.price_indexer import calibrate_dataframe
+        preds_df = calibrate_dataframe(preds_df)
     all_commodities = sorted(preds_df['commodity'].dropna().unique().tolist())
     user_def_crop = st.session_state.get("user_crop", "Wheat")
     def_idx = all_commodities.index(user_def_crop) if user_def_crop in all_commodities else 0

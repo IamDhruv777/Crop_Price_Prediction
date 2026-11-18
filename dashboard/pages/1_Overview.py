@@ -54,6 +54,9 @@ LEADERBOARD_PATH = Path("data/master_model_leaderboard.csv")
 
 geo_df = pd.read_csv(GEO_PATH) if GEO_PATH.exists() else pd.DataFrame()
 preds_df = pd.read_csv(PREDS_PATH) if PREDS_PATH.exists() else pd.DataFrame()
+if not preds_df.empty:
+    from src.utils.price_indexer import calibrate_dataframe
+    preds_df = calibrate_dataframe(preds_df)
 leaderboard_df = pd.read_csv(LEADERBOARD_PATH) if LEADERBOARD_PATH.exists() else pd.DataFrame()
 
 # Horizon filter

@@ -149,8 +149,6 @@ try:
         market_df = calibrate_dataframe(market_df, selected_crop)
 
     latest_row = market_df.iloc[-1]
-    if is_live_cal:
-        latest_row = calibrate_series(latest_row, selected_crop)
 
     cur_p = float(latest_row['modal_price'])
     pred_col = f'predicted_price_{h_suffix}' if f'predicted_price_{h_suffix}' in market_df.columns else 'predicted_price_7d'

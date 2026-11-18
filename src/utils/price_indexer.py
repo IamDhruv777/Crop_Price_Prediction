@@ -161,24 +161,43 @@ def _match_crop_config(crop: str) -> dict[str, float]:
     return {"target": 3500.0, "base_raw": 2000.0, "min_r": 0.88, "max_r": 1.15}
 
 
-def lookup_live_price(crop: str, market: str) -> float | None:
-    """Check if the market has an official live transaction recorded today."""
+_LIVE_DICT: dict[tuple[str, str], float] | None = None
+
+
+def _get_live_dict() -> dict[tuple[str, str], float]:
+    global _LIVE_DICT
+    if _LIVE_DICT is not None:
+        return _LIVE_DICT
+    _LIVE_DICT = {}
     live_df = get_live_feed()
-    if live_df.empty:
+    if not live_df.empty:
+        for _, row in live_df.iterrows():
+            c = str(row.get("commodity", "")).lower().strip()
+            m = str(row.get("market", "")).lower().replace("apmc", "").replace("(", "").replace(")", "").strip()
+            p = float(row.get("modal_price", 0.0))
+            if p > 0:
+                _LIVE_DICT[(c, m)] = p
+                first_w = m.split()[0] if m else ""
+                if len(first_w) >= 3 and (c, first_w) not in _LIVE_DICT:
+                    _LIVE_DICT[(c, first_w)] = p
+    return _LIVE_DICT
+
+
+def lookup_live_price(crop: str, market: str) -> float | None:
+    """Check if the market has an official live transaction recorded today (O(1) lookup)."""
+    live_dict = _get_live_dict()
+    if not live_dict:
         return None
 
-    c_mask = live_df["commodity"].str.lower() == crop.lower()
-    sub = live_df[c_mask]
-    if sub.empty:
-        return None
-
+    c = crop.lower().strip()
     clean_m = market.lower().replace("apmc", "").replace("(", "").replace(")", "").strip()
-    if len(clean_m) >= 3:
-        m_match = sub[sub["market"].str.lower().str.contains(clean_m, regex=False)]
-        if not m_match.empty:
-            p = float(m_match.iloc[-1].get("modal_price", 0.0))
-            if p > 500:
-                return p
+    if (c, clean_m) in live_dict:
+        return live_dict[(c, clean_m)]
+
+    first_w = clean_m.split()[0] if clean_m else ""
+    if len(first_w) >= 3 and (c, first_w) in live_dict:
+        return live_dict[(c, first_w)]
+
     return None
 
 
@@ -192,13 +211,19 @@ def get_effective_multiplier(raw_price: float, crop: str, market: str = "") -> f
         return get_crop_multiplier(crop)
 
     cfg = _match_crop_config(crop)
+    m_min = cfg.get("mandi_min", 0.0)
+    m_max = cfg.get("mandi_max", 999999.0)
+
+    # 0. Idempotency Check: If already calibrated into the 2026 wholesale range, multiplier is 1.0
+    if m_min <= raw_price <= m_max:
+        return 1.0
 
     # 1. Direct live match from today's government feed
     if market:
         live_p = lookup_live_price(crop, market)
         if live_p is not None:
-            if "mandi_min" in cfg and "mandi_max" in cfg:
-                live_p = float(np.clip(live_p, cfg["mandi_min"], cfg["mandi_max"]))
+            if m_min > 0 and m_max < 999999.0:
+                live_p = float(np.clip(live_p, m_min, m_max))
             return live_p / raw_price
 
     # 2. Benchmark calibration
@@ -207,8 +232,8 @@ def get_effective_multiplier(raw_price: float, crop: str, market: str = "") -> f
     calibrated_price = cfg["target"] * bounded_ratio
 
     # 3. Hard wholesale sanity bounds so local outliers never produce unrealistic quotes
-    if "mandi_min" in cfg and "mandi_max" in cfg:
-        calibrated_price = float(np.clip(calibrated_price, cfg["mandi_min"], cfg["mandi_max"]))
+    if m_min > 0 and m_max < 999999.0:
+        calibrated_price = float(np.clip(calibrated_price, m_min, m_max))
 
     return calibrated_price / raw_price
 

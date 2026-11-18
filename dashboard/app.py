@@ -406,6 +406,9 @@ inject_theme()
 @st.cache_data(show_spinner=False)
 def load_data():
     preds = pd.read_csv(PREDS_PATH) if PREDS_PATH.exists() else pd.DataFrame()
+    if not preds.empty:
+        from src.utils.price_indexer import calibrate_dataframe
+        preds = calibrate_dataframe(preds)
     geo = pd.read_csv(GEO_PATH) if GEO_PATH.exists() else pd.DataFrame()
     hist = pd.read_csv(HIST_PATH) if HIST_PATH.exists() else pd.DataFrame()
     return preds, geo, hist
