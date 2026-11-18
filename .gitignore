@@ -117,3 +117,6 @@ mlflow.db
 *.zip
 *.tar.gz
 *.rar
+
+.agents/
+.claude/
