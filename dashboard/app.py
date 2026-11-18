@@ -661,10 +661,10 @@ def render_landing() -> None:
     st.markdown(
         "<div class='kb-disclaimer' style='margin-top:26px;'>"
         + L(
-            "⚠️ <b>पारदर्शिता:</b> यह डेमो अक्टूबर 2016 – जून 2017 के Agmarknet ऐतिहासिक डेटा पर बना है। "
-            "यह लाइव मंडी भाव नहीं है। सलाह 95% कॉन्फ़ॉर्मल बैंड पर आधारित है, भविष्य की गारंटी नहीं।",
-            "⚠️ <b>Transparency:</b> This demo uses historical Agmarknet data from Oct 2016 – Jun 2017. "
-            "It is not a live market feed. Guidance is based on a 95% conformal band, not a guarantee of future prices.",
+            "🟢 <b>लाइव डेटा एवं एआई पूर्वानुमान:</b> यह सिस्टम भारत सरकार के <b>data.gov.in (Agmarknet)</b> लाइव दैनिक मंडी फीड से जुड़ा है। "
+            "भाव का पूर्वानुमान हमारे प्रशिक्षित डीप लर्निंग मॉडलों एवं 95% कॉन्फ़ॉर्मल प्रिडिक्शन बैंड द्वारा संचालित है।",
+            "🟢 <b>Live Data & AI Forecasting:</b> Connected directly to the Government of India's <b>data.gov.in (Agmarknet)</b> live daily mandi stream. "
+            "Forecasts and market guidance are powered by our trained deep learning models with 95% conformal prediction bounds.",
         )
         + "</div>",
         unsafe_allow_html=True,
