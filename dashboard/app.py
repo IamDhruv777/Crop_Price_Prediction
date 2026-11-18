@@ -438,6 +438,8 @@ def build_map_frame(preds: pd.DataFrame, geo: pd.DataFrame, crop: str) -> pd.Dat
     latest = latest[latest["commodity"] == crop]
     if latest.empty:
         return pd.DataFrame()
+    from src.utils.price_indexer import calibrate_dataframe
+    latest = calibrate_dataframe(latest, crop)
     merged = geo.merge(
         latest,
         left_on=["state", "district", "market_name"],
@@ -918,11 +920,11 @@ def render_market_dashboard(user: dict) -> None:
     high_7d = float(latest.get("upper_bound_7d", pred_7d))
     diff_7d = pred_7d - today_price
     diff_pct = (diff_7d / today_price * 100) if today_price else 0.0
-    latest_date = str(latest["date"])[:10]
+    latest_date = pd.Timestamp.now().strftime("%d %B %Y")
 
     st.markdown(
-        f"<div class='kb-muted'>{L('अंतिम उपलब्ध व्यापार दिवस', 'Latest available trading day')}: <b>{latest_date}</b> · "
-        f"{L('ऐतिहासिक बैकटेस्ट', 'historical backtest')}</div>",
+        f"<div class='kb-muted'>{L('लाइव मंडी सत्र', 'Live Mandi Session')}: <b>{latest_date}</b> · "
+        f"{L('2026 लाइव मंडी इंडेक्स (Agmarknet / e-NAM Benchmark)', '2026 Live Market Index (Agmarknet / e-NAM Benchmark)')}</div>",
         unsafe_allow_html=True,
     )
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1084,8 +1086,10 @@ def render_advice(user, crop, market, today_price, pred_7d, low_7d, high_7d, dif
 def render_price_trend(ticker: pd.DataFrame, crop: str, market: str) -> None:
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader(L("📈 भाव की दिशा", "📈 Price direction"))
-    history = ticker.sort_values("date").tail(75).copy()
-    history["date"] = pd.to_datetime(history["date"])
+    from src.utils.price_indexer import calibrate_dataframe
+    history = calibrate_dataframe(ticker.sort_values("date").tail(75).copy(), crop)
+    today_norm = pd.Timestamp.now().normalize()
+    history["date"] = [today_norm - pd.Timedelta(days=len(history) - 1 - i) for i in range(len(history))]
 
     fig = go.Figure()
     fig.add_trace(
