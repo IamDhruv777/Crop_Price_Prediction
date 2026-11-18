@@ -38,70 +38,92 @@ def get_live_feed() -> pd.DataFrame:
 # Verified 2024-2026 Mandi Market Modal Benchmarks (INR / Quintal)
 CROP_2026_CONFIG: dict[str, dict[str, float]] = {
     "Wheat": {
-        "target": 2900.0,
+        "target": 2850.0,
         "base_raw": 1532.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 2600.0,
+        "mandi_max": 3300.0,
     },
     "Soyabean": {
         "target": 7200.0,
         "base_raw": 2750.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 6500.0,
+        "mandi_max": 7850.0,
     },
     "Lentil (Masur)": {
-        "target": 7100.0,
+        "target": 5600.0,      # Wholesale farmgate/mandi rate: Rs 4,500 - 6,500 (MSP Rs 6,700)
         "base_raw": 4500.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 4500.0,
+        "mandi_max": 6500.0,
     },
     "Rice": {
         "target": 3650.0,
         "base_raw": 2420.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 3200.0,
+        "mandi_max": 4300.0,
     },
     "Maize": {
-        "target": 2650.0,
+        "target": 2450.0,
         "base_raw": 1370.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 2100.0,
+        "mandi_max": 2800.0,
     },
     "Green Gram (Moong)": {
-        "target": 8250.0,
+        "target": 7850.0,
         "base_raw": 4476.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 7000.0,
+        "mandi_max": 8800.0,
     },
     "Black Gram (Urd Beans)": {
-        "target": 7950.0,
+        "target": 7650.0,
         "base_raw": 5501.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 6800.0,
+        "mandi_max": 8500.0,
     },
     "Arhar (Tur-Red Gram)": {
         "target": 8500.0,
         "base_raw": 4300.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 7800.0,
+        "mandi_max": 9500.0,
     },
     "Kabuli Chana (Chickpeas-White)": {
         "target": 8200.0,
         "base_raw": 10000.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 6800.0,
+        "mandi_max": 9500.0,
     },
     "White Peas": {
-        "target": 5400.0,
+        "target": 5200.0,
         "base_raw": 3093.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 4500.0,
+        "mandi_max": 6000.0,
     },
     "Cowpea (Lobia-Karamani)": {
-        "target": 6500.0,
+        "target": 6200.0,
         "base_raw": 5050.0,
         "min_r": 0.88,
         "max_r": 1.15,
+        "mandi_min": 5200.0,
+        "mandi_max": 7200.0,
     },
 }
 
@@ -169,17 +191,25 @@ def get_effective_multiplier(raw_price: float, crop: str, market: str = "") -> f
     if not np.isfinite(raw_price) or raw_price <= 0:
         return get_crop_multiplier(crop)
 
+    cfg = _match_crop_config(crop)
+
     # 1. Direct live match from today's government feed
     if market:
         live_p = lookup_live_price(crop, market)
         if live_p is not None:
+            if "mandi_min" in cfg and "mandi_max" in cfg:
+                live_p = float(np.clip(live_p, cfg["mandi_min"], cfg["mandi_max"]))
             return live_p / raw_price
 
     # 2. Benchmark calibration
-    cfg = _match_crop_config(crop)
     raw_ratio = raw_price / cfg["base_raw"]
     bounded_ratio = float(np.clip(raw_ratio, cfg["min_r"], cfg["max_r"]))
     calibrated_price = cfg["target"] * bounded_ratio
+
+    # 3. Hard wholesale sanity bounds so local outliers never produce unrealistic quotes
+    if "mandi_min" in cfg and "mandi_max" in cfg:
+        calibrated_price = float(np.clip(calibrated_price, cfg["mandi_min"], cfg["mandi_max"]))
+
     return calibrated_price / raw_price
 
 
