@@ -161,42 +161,83 @@ def _match_crop_config(crop: str) -> dict[str, float]:
     return {"target": 3500.0, "base_raw": 2000.0, "min_r": 0.88, "max_r": 1.15}
 
 
-_LIVE_DICT: dict[tuple[str, str], float] | None = None
+_LIVE_MANDIS: dict[tuple[str, str], float] | None = None
+_LIVE_DISTRICTS: dict[tuple[str, ...], float] | None = None
+_LIVE_STATES: dict[tuple[str, str], float] | None = None
 
 
-def _get_live_dict() -> dict[tuple[str, str], float]:
-    global _LIVE_DICT
-    if _LIVE_DICT is not None:
-        return _LIVE_DICT
-    _LIVE_DICT = {}
+def _init_hierarchical_live_cache():
+    global _LIVE_MANDIS, _LIVE_DISTRICTS, _LIVE_STATES
+    if _LIVE_MANDIS is not None:
+        return
+    _LIVE_MANDIS = {}
+    _LIVE_DISTRICTS = {}
+    _LIVE_STATES = {}
     live_df = get_live_feed()
-    if not live_df.empty:
-        for _, row in live_df.iterrows():
-            c = str(row.get("commodity", "")).lower().strip()
-            m = str(row.get("market", "")).lower().replace("apmc", "").replace("(", "").replace(")", "").strip()
-            p = float(row.get("modal_price", 0.0))
+    if live_df.empty:
+        return
+
+    # 1. Mandi dictionary
+    for _, row in live_df.iterrows():
+        c = str(row.get("commodity", "")).lower().strip()
+        m = str(row.get("market", "")).lower().replace("apmc", "").replace("(", "").replace(")", "").strip()
+        p = float(row.get("modal_price", 0.0))
+        if p > 0:
+            _LIVE_MANDIS[(c, m)] = p
+            first_w = m.split()[0] if m else ""
+            if len(first_w) >= 3 and (c, first_w) not in _LIVE_MANDIS:
+                _LIVE_MANDIS[(c, first_w)] = p
+
+    # 2. District median dictionary (Direct real price for this specific district today)
+    if {"commodity", "state", "district", "modal_price"}.issubset(live_df.columns):
+        dist_grp = live_df.groupby(["commodity", "state", "district"])["modal_price"].median().reset_index()
+        for _, row in dist_grp.iterrows():
+            c = str(row["commodity"]).lower().strip()
+            s = str(row["state"]).lower().strip()
+            d = str(row["district"]).lower().strip()
+            p = float(row["modal_price"])
             if p > 0:
-                _LIVE_DICT[(c, m)] = p
-                first_w = m.split()[0] if m else ""
-                if len(first_w) >= 3 and (c, first_w) not in _LIVE_DICT:
-                    _LIVE_DICT[(c, first_w)] = p
-    return _LIVE_DICT
+                _LIVE_DISTRICTS[(c, s, d)] = p
+                _LIVE_DISTRICTS[(c, d)] = p
+
+    # 3. State median dictionary (Direct real price for this state today)
+    if {"commodity", "state", "modal_price"}.issubset(live_df.columns):
+        state_grp = live_df.groupby(["commodity", "state"])["modal_price"].median().reset_index()
+        for _, row in state_grp.iterrows():
+            c = str(row["commodity"]).lower().strip()
+            s = str(row["state"]).lower().strip()
+            p = float(row["modal_price"])
+            if p > 0:
+                _LIVE_STATES[(c, s)] = p
 
 
-def lookup_live_price(crop: str, market: str) -> float | None:
-    """Check if the market has an official live transaction recorded today (O(1) lookup)."""
-    live_dict = _get_live_dict()
-    if not live_dict:
+def lookup_live_price(crop: str, market: str = "", district: str = "", state: str = "") -> float | None:
+    """Check if the market, district, or state has an official live transaction recorded today (O(1) lookup)."""
+    _init_hierarchical_live_cache()
+    if not _LIVE_MANDIS:
         return None
 
     c = crop.lower().strip()
+    s = state.lower().strip()
+    d = district.lower().strip()
     clean_m = market.lower().replace("apmc", "").replace("(", "").replace(")", "").strip()
-    if (c, clean_m) in live_dict:
-        return live_dict[(c, clean_m)]
-
     first_w = clean_m.split()[0] if clean_m else ""
-    if len(first_w) >= 3 and (c, first_w) in live_dict:
-        return live_dict[(c, first_w)]
+
+    # Tier 1: Exact Mandi Match
+    if clean_m and (c, clean_m) in _LIVE_MANDIS:
+        return _LIVE_MANDIS[(c, clean_m)]
+    if len(first_w) >= 3 and (c, first_w) in _LIVE_MANDIS:
+        return _LIVE_MANDIS[(c, first_w)]
+
+    # Tier 2: Real District Live Transaction
+    if d and (c, s, d) in _LIVE_DISTRICTS:
+        return _LIVE_DISTRICTS[(c, s, d)]
+    if d and (c, d) in _LIVE_DISTRICTS:
+        return _LIVE_DISTRICTS[(c, d)]
+
+    # Tier 3: Real State Live Transaction
+    if s and (c, s) in _LIVE_STATES:
+        return _LIVE_STATES[(c, s)]
 
     return None
 
@@ -206,7 +247,7 @@ def get_crop_multiplier(crop: str) -> float:
     return cfg["target"] / cfg["base_raw"]
 
 
-def get_effective_multiplier(raw_price: float, crop: str, market: str = "") -> float:
+def get_effective_multiplier(raw_price: float, crop: str, state: str = "", district: str = "", market: str = "") -> float:
     if not np.isfinite(raw_price) or raw_price <= 0:
         return get_crop_multiplier(crop)
 
@@ -218,15 +259,14 @@ def get_effective_multiplier(raw_price: float, crop: str, market: str = "") -> f
     if m_min <= raw_price <= m_max:
         return 1.0
 
-    # 1. Direct live match from today's government feed
-    if market:
-        live_p = lookup_live_price(crop, market)
-        if live_p is not None:
-            if m_min > 0 and m_max < 999999.0:
-                live_p = float(np.clip(live_p, m_min, m_max))
-            return live_p / raw_price
+    # 1. Direct live match from today's government feed (Mandi -> District -> State)
+    live_p = lookup_live_price(crop, market=market, district=district, state=state)
+    if live_p is not None:
+        if m_min > 0 and m_max < 999999.0:
+            live_p = float(np.clip(live_p, m_min, m_max))
+        return live_p / raw_price
 
-    # 2. Benchmark calibration
+    # 2. Benchmark calibration with bounded ratio
     raw_ratio = raw_price / cfg["base_raw"]
     bounded_ratio = float(np.clip(raw_ratio, cfg["min_r"], cfg["max_r"]))
     calibrated_price = cfg["target"] * bounded_ratio
@@ -238,12 +278,14 @@ def get_effective_multiplier(raw_price: float, crop: str, market: str = "") -> f
     return calibrated_price / raw_price
 
 
-def calibrate_series(series: pd.Series, crop: str | None = None, market: str | None = None) -> pd.Series:
+def calibrate_series(series: pd.Series, crop: str | None = None, market: str | None = None, district: str | None = None, state: str | None = None) -> pd.Series:
     s = series.copy()
     c = crop or s.get("commodity", "")
     m = market or s.get("market", "")
+    d = district or s.get("district", "")
+    st_val = state or s.get("state", "")
     raw_p = float(s.get("modal_price", 0.0))
-    mult = get_effective_multiplier(raw_p, str(c), str(m))
+    mult = get_effective_multiplier(raw_p, str(c), str(st_val), str(d), str(m))
     for col in PRICE_COLS:
         if col in s and pd.notna(s[col]) and isinstance(s[col], (int, float, np.number)):
             s[col] = round(float(s[col]) * mult, 2)
@@ -260,13 +302,14 @@ def calibrate_dataframe(df: pd.DataFrame, crop: str | None = None) -> pd.DataFra
         if "modal_price" in out.columns:
             cfg = _match_crop_config(c)
             raw_prices = out["modal_price"].fillna(cfg["base_raw"]).values
+            states = out["state"].astype(str).values if "state" in out.columns else [""] * len(out)
+            districts = out["district"].astype(str).values if "district" in out.columns else [""] * len(out)
             markets = out["market"].astype(str).values if "market" in out.columns else [""] * len(out)
             mults = np.zeros(len(out))
 
             for idx in range(len(out)):
                 raw_p = float(raw_prices[idx])
-                m_name = markets[idx]
-                mults[idx] = get_effective_multiplier(raw_p, c, m_name)
+                mults[idx] = get_effective_multiplier(raw_p, c, states[idx], districts[idx], markets[idx])
 
             for col in PRICE_COLS:
                 if col in out.columns:
