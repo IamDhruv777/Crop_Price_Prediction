@@ -30,7 +30,7 @@
     "deployment_registry.json": {
       "path": "models/trained/deployment_registry.json",
       "size_bytes": 1802,
-      "sha256": "11b4ef33212888a01a9bfab761a6548ce336438b70c9f327a1b1106547966c3c"
+      "sha256": "ba60c9b99167cf326c06c76ec8c6276a8fe9cf9bb28331c2bb127ab2983e2cf5"
     }
   }
 }

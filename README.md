@@ -53,6 +53,10 @@ Traditional forecasting methods either rely on naive national averages or standa
 
 ## 2. System Architecture & 8-Stage Pipeline
 
+![System Architecture](reports/system_architecture.png)
+
+*Comprehensive 8-Stage System Architecture & Technology Topology of Krishi Bhav Saathi.*
+
 The platform is designed around a strict, leak-free 8-stage end-to-end data and modeling pipeline:
 
 ```

@@ -908,6 +908,8 @@ def render_market_dashboard(user: dict) -> None:
         return
 
     latest = ticker.sort_values("date").iloc[-1]
+    from src.utils.price_indexer import calibrate_series
+    latest = calibrate_series(latest, crop)
     today_price = float(latest["modal_price"])
     pred_1d = float(latest.get("predicted_price_1d", today_price))
     pred_7d = float(latest.get("predicted_price_7d", today_price))
