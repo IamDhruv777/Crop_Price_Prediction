@@ -1377,53 +1377,191 @@ def render_profit_calculator(user, today_price, pred_7d, high_7d, low_7d, market
         )
 
 
+def haversine_km(lat1: float, lon1: float, lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
+    """Compute vectorized Haversine distance in kilometers."""
+    R = 6371.0
+    lat1_r, lon1_r = np.radians(lat1), np.radians(lon1)
+    lats_r, lons_r = np.radians(lats), np.radians(lons)
+    dlat = lats_r - lat1_r
+    dlon = lons_r - lon1_r
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1_r) * np.cos(lats_r) * np.sin(dlon / 2.0) ** 2
+    c = 2.0 * np.arcsin(np.clip(np.sqrt(a), 0.0, 1.0))
+    return R * c
+
+
 def render_nearby_mandis(map_frame: pd.DataFrame, market: str, today_price: float) -> None:
     st.subheader(L("🚜 पास की मंडियों में कहाँ ज़्यादा मिलेगा?", "🚜 Which nearby mandi pays more?"))
+    st.caption(
+        L(
+            "वास्तविक भौगोलिक दूरी (Haversine दूरी) और आज के लाइव मंडी भाव पर आधारित तुलना।",
+            "Real-time comparison based on actual geographic road-hauling distance (Haversine km) and live APMC rates.",
+        )
+    )
     if map_frame.empty:
         st.info(L("आस-पास की मंडी का डेटा उपलब्ध नहीं है।", "Nearby mandi data is unavailable."))
         return
+
     selected_rows = map_frame[map_frame["market_name"] == market]
-    state = selected_rows["state"].iloc[0] if not selected_rows.empty else None
-    nearby = map_frame[map_frame["state"] == state] if state else map_frame
-    nearby = nearby[nearby["market_name"] != market].copy()
-    if nearby.empty:
-        st.info(L("इस राज्य में दूसरी मंडी उपलब्ध नहीं है।", "No other mandi in this state."))
+    if selected_rows.empty:
+        st.info(L("चुनी हुई मंडी का विवरण उपलब्ध नहीं है।", "Selected mandi details are unavailable."))
         return
-    nearby["आपकी मंडी से अंतर (₹/qtl)"] = nearby["modal_price"] - today_price
-    nearby["1 ट्रॉली (50 qtl) पर अंतर"] = nearby["आपकी मंडी से अंतर (₹/qtl)"] * 50
-    table = nearby.sort_values("modal_price", ascending=False).head(8)
+
+    curr_lat = float(selected_rows["latitude"].iloc[0])
+    curr_lon = float(selected_rows["longitude"].iloc[0])
+    curr_district = str(selected_rows["district"].iloc[0])
+    curr_state = str(selected_rows["state"].iloc[0])
+
+    candidates = map_frame[map_frame["market_name"] != market].copy()
+    if candidates.empty:
+        st.info(L("इस फसल के लिए कोई अन्य मंडी उपलब्ध नहीं है।", "No other mandi available for this crop."))
+        return
+
+    # Vectorized Haversine distance from current mandi
+    valid_coords = candidates.dropna(subset=["latitude", "longitude"]).copy()
+    valid_coords = valid_coords[(valid_coords["latitude"] != 0) & (valid_coords["longitude"] != 0)]
+    if not valid_coords.empty and (curr_lat != 0 or curr_lon != 0):
+        valid_coords["distance_km"] = haversine_km(
+            curr_lat,
+            curr_lon,
+            valid_coords["latitude"].to_numpy(dtype=float),
+            valid_coords["longitude"].to_numpy(dtype=float),
+        ).round(1)
+    else:
+        valid_coords["distance_km"] = np.nan
+
+    valid_coords["आपकी मंडी से अंतर (₹/qtl)"] = valid_coords["modal_price"] - today_price
+    valid_coords["1 ट्रॉली (50 qtl) पर अंतर"] = valid_coords["आपकी मंडी से अंतर (₹/qtl)"] * 50
+
+    # User Controls: Scope & Sorting
+    c_scope, c_radius, c_sort = st.columns([1.3, 1.2, 1.5])
+    with c_scope:
+        scope_options = [
+            L("📍 आस-पास (दूरी अनुसार)", "📍 Nearby (by distance)"),
+            L(f"🏛️ केवल जिला ({curr_district})", f"🏛️ District ({curr_district}) only"),
+            L(f"🌐 पूरा राज्य ({curr_state})", f"🌐 Entire State ({curr_state})"),
+        ]
+        chosen_scope = st.selectbox(
+            L("दायरा चुनें:", "Select Scope:"),
+            scope_options,
+            index=0,
+            key="nearby_scope_select",
+        )
+
+    with c_radius:
+        if chosen_scope == scope_options[0]:
+            radius_km = st.select_slider(
+                L("अधिकतम दूरी:", "Max Distance:"),
+                options=[25, 50, 75, 100, 150],
+                value=75,
+                format_func=lambda x: f"{x} km",
+                key="nearby_radius_slider",
+            )
+        else:
+            radius_km = None
+            st.write("")
+
+    with c_sort:
+        sort_choice = st.radio(
+            L("क्रम:", "Sort by:"),
+            [
+                L("💰 सबसे अधिक भाव", "💰 Highest Price"),
+                L("📍 सबसे नज़दीक", "📍 Closest Distance"),
+            ],
+            horizontal=True,
+            key="nearby_sort_choice",
+        )
+
+    # Apply scope filtering
+    if chosen_scope == scope_options[1]:  # Same district
+        filtered = valid_coords[valid_coords["district"] == curr_district].copy()
+        if filtered.empty:
+            st.warning(
+                L(
+                    f"आपके जिले ({curr_district}) में इस फसल की केवल यही मंडी दर्ज है। आस-पास की अन्य मंडियां देखने के लिए '📍 आस-पास' चुनें।",
+                    f"Only this mandi is registered in {curr_district} for this crop. Switch to '📍 Nearby' to see surrounding APMCs.",
+                )
+            )
+            filtered = valid_coords.copy()
+    elif chosen_scope == scope_options[2]:  # Entire state
+        filtered = valid_coords[valid_coords["state"] == curr_state].copy()
+    else:  # Nearby by distance
+        if not valid_coords["distance_km"].isna().all():
+            filtered = valid_coords[valid_coords["distance_km"] <= radius_km].copy()
+            if len(filtered) < 3:
+                filtered = valid_coords.sort_values("distance_km", ascending=True).head(8).copy()
+                st.caption(
+                    L(
+                        f"💡 {radius_km} किमी के दायरे में कम मंडियां उपलब्ध हैं। निकटतम उपलब्ध {len(filtered)} मंडियां दिखाई जा रही हैं।",
+                        f"💡 Few APMCs within {radius_km} km; showing nearest available {len(filtered)} mandis.",
+                    )
+                )
+        else:
+            filtered = valid_coords.copy()
+
+    # Apply sorting
+    is_price_sort = "भाव" in sort_choice or "Price" in sort_choice
+    if is_price_sort:
+        table = filtered.sort_values(by=["modal_price", "distance_km"], ascending=[False, True]).head(8)
+    else:
+        table = filtered.sort_values(by=["distance_km", "modal_price"], ascending=[True, False]).head(8)
+
+    if table.empty:
+        st.info(L("कोई उपयुक्त मंडी नहीं मिली।", "No matching mandis found."))
+        return
+
+    # Prepare display table
     display = table[
-        ["market_name", "district", "modal_price", "आपकी मंडी से अंतर (₹/qtl)", "1 ट्रॉली (50 qtl) पर अंतर"]
+        [
+            "market_name",
+            "district",
+            "distance_km",
+            "modal_price",
+            "आपकी मंडी से अंतर (₹/qtl)",
+            "1 ट्रॉली (50 qtl) पर अंतर",
+        ]
     ].rename(
         columns={
             "market_name": L("मंडी", "Mandi"),
             "district": L("जिला", "District"),
+            "distance_km": L("दूरी (किमी)", "Distance (km)"),
             "modal_price": L("आज का भाव (₹/qtl)", "Today (₹/qtl)"),
         }
     )
+
     st.dataframe(
         display,
         use_container_width=True,
         hide_index=True,
         column_config={
+            L("दूरी (किमी)", "Distance (km)"): st.column_config.NumberColumn(format="%.1f km"),
             L("आज का भाव (₹/qtl)", "Today (₹/qtl)"): st.column_config.NumberColumn(format="₹%d"),
-            L("आपकी मंडी से अंतर (₹/qtl)", "Gap vs your mandi (₹/qtl)"): st.column_config.NumberColumn(format="₹%d"),
-            L("1 ट्रॉली (50 qtl) पर अंतर", "Gap on 1 trolley (50 qtl)"): st.column_config.NumberColumn(format="₹%d"),
+            L("आपकी मंडी से अंतर (₹/qtl)", "Gap vs your mandi (₹/qtl)"): st.column_config.NumberColumn(format="%+d"),
+            L("1 ट्रॉली (50 qtl) पर अंतर", "Gap on 1 trolley (50 qtl)"): st.column_config.NumberColumn(format="%+d"),
         },
     )
-    best = table.iloc[0]
-    gap = float(best["आपकी मंडी से अंतर (₹/qtl)"])
-    if gap > 0:
+
+    # Highlight banner
+    higher_paying = table[table["आपकी मंडी से अंतर (₹/qtl)"] > 0]
+    if not higher_paying.empty:
+        best = higher_paying.iloc[0]
+        gap = float(best["आपकी मंडी से अंतर (₹/qtl)"])
+        dist_str = f"केवल **{best['distance_km']:.1f} किमी** दूर" if not pd.isna(best["distance_km"]) else ""
+        dist_en = f"just **{best['distance_km']:.1f} km** away" if not pd.isna(best["distance_km"]) else ""
         st.success(
             L(
-                f"**{best['market_name']}** ({best['district']}) में आज {rupees(float(best['modal_price']))} प्रति क्विंटल मिल रहा है — "
-                f"आपकी मंडी से {rupees(gap)} ज़्यादा। 50 क्विंटल पर लगभग **{rupees(gap * 50)}** अतिरिक्त, भाड़ा निकालने से पहले।",
-                f"**{best['market_name']}** ({best['district']}) is paying {rupees(float(best['modal_price']))} per quintal today — "
-                f"{rupees(gap)} more than your mandi. About **{rupees(gap * 50)}** extra on 50 quintals, before freight.",
+                f"**{best['market_name']}** ({best['district']}) {dist_str} है और आज **{rupees(float(best['modal_price']))}** प्रति क्विंटल दे रही है — "
+                f"आपकी मंडी से **{rupees(gap)} ज़्यादा**। 50 क्विंटल (1 ट्रॉली) पर लगभग **{rupees(gap * 50)} अतिरिक्त**, भाड़ा निकालने से पहले।",
+                f"**{best['market_name']}** ({best['district']}) is {dist_en} and paying **{rupees(float(best['modal_price']))}** per quintal today — "
+                f"**{rupees(gap)} more** than your mandi. About **{rupees(gap * 50)} extra** on 50 quintals, before freight.",
             )
         )
     else:
-        st.info(L("आपकी वर्तमान मंडी इस समय आस-पास की मंडियों में सबसे अच्छी है।", "Your current mandi is the best nearby option right now."))
+        st.info(
+            L(
+                f"आपकी वर्तमान मंडी **{market}** आस-पास के विकल्पों में सबसे अच्छा भाव दे रही है।",
+                f"Your current mandi **{market}** is paying as well as or better than all nearby alternatives.",
+            )
+        )
 
 
 def render_research_dashboard(user: dict) -> None:
